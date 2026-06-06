@@ -11,6 +11,9 @@ export type ThinkingLevel = ReturnType<ExtensionAPI["getThinkingLevel"]>;
 export interface RuntimeState {
   thinkingLevel: ThinkingLevel;
   requestRender?: () => void;
+  renderVersion: number;
+  context: { label: string; color: string };
+  tokenTotals: TokenTotals;
   codexUsage: CodexUsageManager;
 }
 

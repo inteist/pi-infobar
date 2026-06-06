@@ -14,6 +14,10 @@ import {
   showCodexReport,
 } from "./codex-usage/index.js";
 import {
+  contextSnapshot,
+  getTokenTotals,
+} from "./format.js";
+import {
   renderPrimaryLine,
   renderSeparatorLine,
   renderUsageLine,
@@ -32,10 +36,24 @@ export default function piInfobar(pi: ExtensionAPI): void {
   const codexUsage = new CodexUsageManager();
   const runtime: RuntimeState = {
     thinkingLevel: "off",
+    renderVersion: 0,
+    context: { label: "?", color: "" },
+    tokenTotals: { input: 0, output: 0, cost: 0 },
     codexUsage,
   };
 
-  const refresh = () => runtime.requestRender?.();
+  const updateFooterStats = (ctx: ExtensionContext) => {
+    runtime.context = contextSnapshot(ctx);
+    runtime.tokenTotals = getTokenTotals(ctx);
+  };
+  const refresh = () => {
+    runtime.renderVersion += 1;
+    runtime.requestRender?.();
+  };
+  const refreshStats = (ctx: ExtensionContext) => {
+    updateFooterStats(ctx);
+    refresh();
+  };
   const refreshCodexUsage = (
     ctx: ExtensionContext,
     force = false,
@@ -61,12 +79,14 @@ export default function piInfobar(pi: ExtensionAPI): void {
     }
 
     ctx.ui.setFooter((tui, _theme, footerData) => {
+      let cachedWidth = -1;
+      let cachedVersion = -1;
+      let cachedLines: string[] = [""];
+
       runtime.requestRender = () => tui.requestRender();
-      codexUsage.setRenderCallback(() => tui.requestRender());
-      const unsubscribeBranch = footerData.onBranchChange(() =>
-        tui.requestRender(),
-      );
-      const clock = setInterval(() => tui.requestRender(), 60_000);
+      codexUsage.setRenderCallback(refresh);
+      const unsubscribeBranch = footerData.onBranchChange(refresh);
+      const clock = setInterval(refresh, 60_000);
 
       return {
         dispose() {
@@ -74,15 +94,25 @@ export default function piInfobar(pi: ExtensionAPI): void {
           clearInterval(clock);
           codexUsage.setRenderCallback(undefined);
         },
-        invalidate() {},
+        invalidate() {
+          cachedWidth = -1;
+          cachedVersion = -1;
+        },
         render(width: number): string[] {
           if (width <= 0) return [""];
-          return [
+          if (cachedWidth === width && cachedVersion === runtime.renderVersion) {
+            return cachedLines;
+          }
+
+          cachedLines = [
             renderSeparatorLine(width),
             renderPrimaryLine(width, ctx, footerData, runtime),
             renderSeparatorLine(width, " "),
             renderUsageLine(width, ctx, footerData, runtime),
           ];
+          cachedWidth = width;
+          cachedVersion = runtime.renderVersion;
+          return cachedLines;
         },
       };
     });
@@ -99,6 +129,7 @@ export default function piInfobar(pi: ExtensionAPI): void {
       else if (action === "off") enabled = false;
       else enabled = !enabled;
 
+      if (enabled) updateFooterStats(ctx);
       installFooter(ctx);
       if (enabled) refreshCodexUsage(ctx);
       else codexUsage.clear();
@@ -155,13 +186,15 @@ export default function piInfobar(pi: ExtensionAPI): void {
 
   pi.on("session_start", (_event, ctx) => {
     runtime.thinkingLevel = pi.getThinkingLevel();
+    updateFooterStats(ctx);
     installFooter(ctx);
+    refresh();
     refreshCodexUsage(ctx);
   });
 
   pi.on("session_tree", (_event, ctx) => {
     installFooter(ctx);
-    refresh();
+    refreshStats(ctx);
     refreshCodexUsage(ctx);
   });
 
@@ -174,12 +207,12 @@ export default function piInfobar(pi: ExtensionAPI): void {
   });
 
   pi.on("model_select", (event, ctx) => {
-    refresh();
+    refreshStats(ctx);
     refreshCodexUsage(ctx, false, event.model);
   });
 
-  pi.on("agent_end", () => refresh());
-  pi.on("turn_end", () => refresh());
+  pi.on("agent_end", (_event, ctx) => refreshStats(ctx));
+  pi.on("turn_end", (_event, ctx) => refreshStats(ctx));
 
   pi.on("thinking_level_select", (event) => {
     runtime.thinkingLevel = event.level;

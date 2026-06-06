@@ -7,13 +7,11 @@ import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { ansi } from "./ansi.js";
 import { chip, renderChip, renderChips, renderSegmentedChip } from "./chips.js";
 import {
-  contextSnapshot,
   formatCodexChipData,
   formatCost,
   formatCount,
   formatThinking,
   formatWorkingPath,
-  getTokenTotals,
   modelName,
   shorten,
   smartPathTruncate,
@@ -30,7 +28,7 @@ export function renderPrimaryLine(
   footerData: ReadonlyFooterDataProvider,
   runtime: RuntimeState,
 ): string {
-  const context = contextSnapshot(ctx);
+  const context = runtime.context;
   const right: Chip[] = [
     chip("MODEL", modelName(ctx), COLOR.model, 1, {
       valueBg: COLOR.panelLift,
@@ -62,7 +60,7 @@ export function renderUsageLine(
   footerData: ReadonlyFooterDataProvider,
   runtime: RuntimeState,
 ): string {
-  const totals = getTokenTotals(ctx);
+  const totals = runtime.tokenTotals;
   const right: Chip[] = [
     chip("↑", formatCount(totals.input), COLOR.token, 1),
     chip("↓", formatCount(totals.output), COLOR.token, 1),
