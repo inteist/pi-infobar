@@ -1,6 +1,6 @@
 {
   "name": "pi-infobar",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "High-contrast, readable info bar for the Pi coding agent.",
   "type": "module",
   "keywords": [
@@ -38,7 +38,7 @@
     "extensions": [
       "./index.ts"
     ],
-    "image": "./pi-infobar.png"
+    "image": "https://github.com/inteist/pi-infobar/raw/main/pi-infobar.png"
   },
   "publishConfig": {
     "access": "public"
