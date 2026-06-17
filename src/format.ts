@@ -8,7 +8,11 @@ import type {
 	CodexUsageReport,
 	CodexUsageState,
 } from "./codex-usage/index.js";
-import { formatCredits, selectSnapshotForModel } from "./codex-usage/index.js";
+import {
+	formatCredits,
+	isOpenAICodexModel,
+	selectSnapshotForModel,
+} from "./codex-usage/index.js";
 import type { ThinkingLevel, TokenTotals } from "./types.js";
 import { COLOR, codexAccent, codexPercentColor, contextColor } from "./theme.js";
 
@@ -93,11 +97,16 @@ export function formatCodexChipData(
 	state: CodexUsageState,
 	model: CodexUsageModel | undefined,
 ): CodexChipData {
+	const active = isOpenAICodexModel(model);
+	const accent = codexAccent(state, active);
+
 	if (state === "loading") {
 		return {
 			text: "checking",
-			segments: [{ text: "checking", fg: COLOR.soft }],
-			accent: codexAccent(state),
+			segments: [
+				{ text: "checking", fg: active ? COLOR.soft : COLOR.openAiInactive },
+			],
+			accent,
 		};
 	}
 
@@ -105,8 +114,10 @@ export function formatCodexChipData(
 		const label = state === "error" ? "usage error" : "usage —";
 		return {
 			text: label,
-			segments: [{ text: label, fg: COLOR.soft }],
-			accent: codexAccent(state),
+			segments: [
+				{ text: label, fg: active ? COLOR.soft : COLOR.openAiInactive },
+			],
+			accent,
 		};
 	}
 
@@ -114,8 +125,10 @@ export function formatCodexChipData(
 	if (!snapshot) {
 		return {
 			text: "usage unavailable",
-			segments: [{ text: "usage unavailable", fg: COLOR.soft }],
-			accent: codexAccent("loaded"),
+			segments: [
+				{ text: "usage unavailable", fg: active ? COLOR.soft : COLOR.openAiInactive },
+			],
+			accent,
 		};
 	}
 
@@ -124,44 +137,52 @@ export function formatCodexChipData(
 
 	const prefix = formatStatuslinePrefix(snapshot);
 	if (prefix !== "codex") {
-		parts.push({ text: prefix, fg: COLOR.soft });
+		parts.push({ text: prefix, fg: active ? COLOR.soft : COLOR.openAiInactive });
 		textParts.push(prefix);
 	}
 
 	if (snapshot.primary) {
 		const pct = formatRemainingPercent(snapshot.primary);
+		const pctColor = active
+			? codexPercentColor(100 - clampPercent(snapshot.primary.usedPercent))
+			: COLOR.openAiInactive;
 		parts.push(
-			{ text: pct, fg: codexPercentColor(100 - clampPercent(snapshot.primary.usedPercent)), bold: true },
-			{ text: "5h", fg: COLOR.dim },
+			{ text: pct, fg: pctColor, bold: true },
+			{ text: "5h", fg: active ? COLOR.dim : COLOR.openAiInactive },
 		);
 		textParts.push(`${pct} 5h`);
 	}
 	if (snapshot.secondary) {
 		const pct = formatRemainingPercent(snapshot.secondary);
+		const pctColor = active
+			? codexPercentColor(100 - clampPercent(snapshot.secondary.usedPercent))
+			: COLOR.openAiInactive;
 		parts.push(
-			{ text: pct, fg: codexPercentColor(100 - clampPercent(snapshot.secondary.usedPercent)), bold: true },
-			{ text: "wk", fg: COLOR.dim },
+			{ text: pct, fg: pctColor, bold: true },
+			{ text: "wk", fg: active ? COLOR.dim : COLOR.openAiInactive },
 		);
 		textParts.push(`${pct} wk`);
 	}
 	if (parts.length === 0 && snapshot.credits) {
 		const creditsText = formatCredits(snapshot.credits);
-		parts.push({ text: creditsText, fg: COLOR.soft });
+		parts.push({ text: creditsText, fg: active ? COLOR.soft : COLOR.openAiInactive });
 		textParts.push(creditsText);
 	}
 
 	if (parts.length === 0) {
 		return {
 			text: "usage —",
-			segments: [{ text: "usage —", fg: COLOR.soft }],
-			accent: codexAccent("loaded"),
+			segments: [
+				{ text: "usage —", fg: active ? COLOR.soft : COLOR.openAiInactive },
+			],
+			accent,
 		};
 	}
 
 	return {
 		text: textParts.join(" "),
 		segments: parts,
-		accent: codexAccent("loaded"),
+		accent,
 	};
 }
 

@@ -4,8 +4,9 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
-import { ansi } from "./ansi.js";
+import { ansi, readableTextOn } from "./ansi.js";
 import { chip, renderChip, renderChips, renderSegmentedChip } from "./chips.js";
+import { isOpenAICodexModel } from "./codex-usage/index.js";
 import {
   formatCodexChipData,
   formatCost,
@@ -226,16 +227,14 @@ function renderCodexStatus(
 
   const manager = runtime.codexUsage;
   const report = manager.getReport();
-  if (!report && manager.state === "idle") return "";
+  if (!report && manager.state === "idle" && isOpenAICodexModel(ctx.model))
+    return "";
 
   const data = formatCodexChipData(report, manager.state, ctx.model);
   const accent = data.accent;
-  const labelFg =
-    accent === COLOR.contextWarn || accent === COLOR.codex
-      ? COLOR.black
-      : COLOR.ink;
+  const labelFg = readableTextOn(accent);
 
-  const full = renderSegmentedChip("CODEX", data.segments, accent, {
+  const full = renderSegmentedChip("OpenAI", data.segments, accent, {
     labelFg,
     valueBg: COLOR.panelLift,
   });
@@ -243,13 +242,13 @@ function renderCodexStatus(
 
   const emptyWidth = visibleWidth(
     renderChip(
-      chip("CODEX", "", accent, 1, { labelFg, valueBg: COLOR.panelLift }),
+      chip("OpenAI", "", accent, 1, { labelFg, valueBg: COLOR.panelLift }),
     ),
   );
   const valueWidth = Math.max(1, maxWidth - emptyWidth);
   return truncateToWidth(
     renderChip(
-      chip("CODEX", truncateToWidth(data.text, valueWidth, "…"), accent, 1, {
+      chip("OpenAI", truncateToWidth(data.text, valueWidth, "…"), accent, 1, {
         labelFg,
         valueBg: COLOR.panelLift,
         boldValue: manager.state === "loaded",

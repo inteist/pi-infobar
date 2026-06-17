@@ -39,10 +39,12 @@ export const COLOR = {
   thinkLow: "#bbf7d0",
   thinkMedium: "#22c55e",
   thinkHigh: "#f97316",
-  thinkXhigh: "#ef4444",
+  thinkXhigh: "#dc46dc",
 
   // Codex
-  codex: "#06b6d4",
+  // openAi: "#009eb9",
+  openAi: "#60a5fa",
+  openAiInactive: "#6c7074",
 
   // Git
   git: "#22c55e",
@@ -87,7 +89,12 @@ export function thinkingColor(level: ThinkingLevel): string {
   }
 }
 
-export function codexAccent(state: import("./codex-usage/index.js").CodexUsageState): string {
+export function codexAccent(
+  state: import("./codex-usage/index.js").CodexUsageState,
+  active = true,
+): string {
+  if (!active) return COLOR.openAiInactive;
+
   switch (state) {
     case "idle":
       return COLOR.panelSoft;
@@ -96,7 +103,7 @@ export function codexAccent(state: import("./codex-usage/index.js").CodexUsageSt
     case "error":
       return COLOR.contextFull;
     case "loaded":
-      return COLOR.codex;
+      return COLOR.openAi;
   }
 }
 
@@ -110,4 +117,3 @@ export function codexPercentColor(percent: number): string {
   if (clamped <= 85) return COLOR.contextLightGreen;
   return COLOR.contextGreen;
 }
-
