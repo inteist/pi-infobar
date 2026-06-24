@@ -22,6 +22,10 @@ const DEFAULT_TIMEOUT_MS = 15_000;
  *  refresh is triggered.  5 minutes balances server load vs. staleness. */
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
+/** Initial delay before retrying a failed background refresh.
+ *  Consecutive failures back off exponentially up to CACHE_TTL_MS. */
+const REFRESH_RETRY_BASE_MS = 60 * 1000;
+
 /** Deep-link to the usage settings page shown in the /codex-status report. */
 const USAGE_SETTINGS_URL = "https://chatgpt.com/codex/settings/usage";
 
@@ -103,6 +107,9 @@ export class CodexUsageManager {
 	 */
 	private requestId = 0;
 
+	/** Number of consecutive failed refresh attempts, used for retry backoff. */
+	private refreshFailures = 0;
+
 	private _state: CodexUsageState = "idle";
 
 	/** Callback invoked whenever the state or data changes so the TUI redraws. */
@@ -146,6 +153,7 @@ export class CodexUsageManager {
 	setReport(report: CodexUsageReport, ctx?: ExtensionContext): void {
 		// Bump requestId so any in-flight async refresh knows it is now stale.
 		this.requestId++;
+		this.refreshFailures = 0;
 		this.cache = { createdAt: Date.now(), report };
 		this._state = "loaded";
 		if (ctx) this.scheduleRefresh(ctx);
@@ -202,13 +210,15 @@ export class CodexUsageManager {
 			//  - `loaded` → prior data exists; keep showing it quietly
 			//  - `idle`   → no data and not relevant to the current model
 			const showErrors = options.showErrors ?? isOpenAICodexModel(model);
+			this.refreshFailures++;
 			this._state = showErrors ? "error" : this.cache ? "loaded" : "idle";
-			if (showErrors || this.cache) this.scheduleRefresh(ctx);
+			if (showErrors || this.cache) this.scheduleAfterFailure(ctx);
 			else this.clearTimer();
 			this.onRender?.();
 			return;
 		}
 
+		this.refreshFailures = 0;
 		this.cache = { createdAt: Date.now(), report: result.report };
 		this._state = "loaded";
 		this.scheduleRefresh(ctx);
@@ -221,6 +231,7 @@ export class CodexUsageManager {
 	 */
 	clear(): void {
 		this.requestId++;
+		this.refreshFailures = 0;
 		this.clearTimer();
 		this.cache = undefined;
 		this._state = "idle";
@@ -242,19 +253,44 @@ export class CodexUsageManager {
 	 *
 	 * We compute the remaining TTL from `cache.createdAt` so that calling
 	 * `scheduleRefresh` multiple times (e.g. after `setReport` followed by an
-	 * event handler) always aims for the same absolute expiry, preventing
-	 * unnecessary early re-fetches.
-	 *
-	 * `unref()` is called on the timer so it does not prevent the Node.js
-	 * process from exiting if the extension is the only thing keeping it alive.
+	 * event handler) always targets the same absolute expiry, preventing timer
+	 * drift from postponing refreshes indefinitely.
 	 */
 	private scheduleRefresh(ctx: ExtensionContext): void {
+		this.scheduleTimer(ctx, this.cacheRefreshDelayMs());
+	}
+
+	/**
+	 * After a failed refresh, preserve the normal cache-expiry timer when the
+	 * cache is still fresh.  If the cache is already stale (or absent), retry
+	 * with exponential backoff instead of scheduling a 0ms immediate loop.
+	 */
+	private scheduleAfterFailure(ctx: ExtensionContext): void {
+		if (this.cache && this.isCacheFresh()) {
+			this.scheduleRefresh(ctx);
+			return;
+		}
+		this.scheduleTimer(ctx, this.refreshRetryDelayMs());
+	}
+
+	private cacheRefreshDelayMs(): number {
+		if (!this.cache) return CACHE_TTL_MS;
+		const elapsed = Math.max(0, Date.now() - this.cache.createdAt);
+		return Math.max(0, CACHE_TTL_MS - elapsed);
+	}
+
+	private refreshRetryDelayMs(): number {
+		const failures = Math.max(1, this.refreshFailures);
+		return Math.min(CACHE_TTL_MS, REFRESH_RETRY_BASE_MS * 2 ** (failures - 1));
+	}
+
+	/**
+	 * `unref()` keeps this timer from preventing Node.js from exiting if the
+	 * extension is the only thing keeping the process alive.
+	 */
+	private scheduleTimer(ctx: ExtensionContext, delayMs: number): void {
 		this.clearTimer();
-		// Calculate how many ms remain until the current cache entry expires.
-		// Fall back to a full TTL when there is no cache (e.g. after a failure
-		// where we still want to retry).
-		const elapsed = this.cache ? Date.now() - this.cache.createdAt : 0;
-		const delay = Math.max(0, CACHE_TTL_MS - elapsed);
+		const delay = Math.max(0, delayMs);
 		this.refreshTimer = setTimeout(() => {
 			void this.refresh(ctx, true);
 		}, delay);

@@ -20,9 +20,10 @@ const GIT_CACHE_MAX_SIZE = 50;
 // ── Cache ────────────────────────────────────────────────────────────
 
 /**
- * Module-level LRU-like cache keyed by the working-directory path.
+ * Module-level LRU cache keyed by the working-directory path.
  * Entries expire after GIT_CACHE_TTL_MS; stale entries are evicted lazily
- * on every write once the cache exceeds GIT_CACHE_MAX_SIZE.
+ * before each write, and the least-recently-used live entry is removed before
+ * inserting a new key would exceed GIT_CACHE_MAX_SIZE.
  */
 const gitCache = new Map<string, GitSnapshot>();
 
@@ -47,6 +48,7 @@ export function getGitSnapshot(cwd: string, fallbackBranch?: string): GitSnapsho
   // reported (e.g. the session switched branches between cache refreshes),
   // overlay it without invalidating the rest of the snapshot.
   if (cached && cached.expiresAt > now) {
+    touchGitCacheEntry(cwd, cached);
     return fallbackBranch && cached.branch !== fallbackBranch ? { ...cached, branch: fallbackBranch } : cached;
   }
 
@@ -89,25 +91,34 @@ export function getGitSnapshot(cwd: string, fallbackBranch?: string): GitSnapsho
 /**
  * Write `snapshot` into the cache for `cwd`.
  *
- * Before inserting, if the cache has grown beyond GIT_CACHE_MAX_SIZE, sweep
- * out entries whose TTL has already elapsed.  If the cache is still too large
- * after that (all entries are fresh), evict the oldest insertion (Map
- * iteration order is insertion order).
+ * Remove any existing entry for this cwd first so refreshing an existing key
+ * never evicts an unrelated worktree just because the cache is full.  Then
+ * sweep expired entries and, only if adding this new key would exceed the cap,
+ * evict least-recently-used live entries until there is room.
  */
 function evictAndSet(cwd: string, snapshot: GitSnapshot): void {
-  if (gitCache.size >= GIT_CACHE_MAX_SIZE) {
-    const now = Date.now();
-    // First pass: remove all expired entries.
-    for (const [key, entry] of gitCache) {
-      if (entry.expiresAt <= now) gitCache.delete(key);
-    }
-    // Second pass: if still at the limit, drop the oldest live entry.
-    if (gitCache.size >= GIT_CACHE_MAX_SIZE) {
-      const oldest = gitCache.keys().next().value;
-      if (oldest !== undefined) gitCache.delete(oldest);
-    }
+  gitCache.delete(cwd);
+  sweepExpiredGitCache(Date.now());
+
+  while (gitCache.size >= GIT_CACHE_MAX_SIZE) {
+    const oldest = gitCache.keys().next().value;
+    if (oldest === undefined) break;
+    gitCache.delete(oldest);
   }
+
   gitCache.set(cwd, snapshot);
+}
+
+/** Move a cache hit to the back of the Map so eviction is LRU, not FIFO. */
+function touchGitCacheEntry(cwd: string, snapshot: GitSnapshot): void {
+  gitCache.delete(cwd);
+  gitCache.set(cwd, snapshot);
+}
+
+function sweepExpiredGitCache(now: number): void {
+  for (const [key, entry] of gitCache) {
+    if (entry.expiresAt <= now) gitCache.delete(key);
+  }
 }
 
 // ── Git Commands ─────────────────────────────────────────────────────
