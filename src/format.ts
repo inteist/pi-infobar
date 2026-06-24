@@ -34,6 +34,17 @@ export function modelName(ctx: ExtensionContext): string {
   return shortenModel(model?.id ?? model?.name ?? "no model");
 }
 
+/**
+ * Shorten a raw model id/name to a compact chip-friendly label.
+ *
+ * Transformations applied in order:
+ *  1. Strip the `claude-` vendor prefix.
+ *  2. Convert `gpt-` to `gpt ` (space makes the remaining version number more readable).
+ *  3. Strip date-stamp suffixes of the form `-20YYMMDD`.
+ *  4. Strip the `-latest` alias suffix.
+ *  5. Strip common quality/variant suffixes: `-instruct`, `-preview`, `-thinking`.
+ *  6. Truncate to 28 visible characters with an ellipsis.
+ */
 export function shortenModel(model: string): string {
   return shorten(
     model
@@ -55,6 +66,15 @@ export function formatThinking(level: ThinkingLevel): string {
 
 // ── Tokens / Cost ────────────────────────────────────────────────────
 
+/**
+ * Aggregate input tokens, output tokens, and cost across all assistant
+ * messages in the current session branch.
+ *
+ * Only `role === "assistant"` messages carry usage data; user and system
+ * messages are skipped.  The branch is the linear path from the root to the
+ * currently active leaf, so it represents the "active conversation" view
+ * without counting pruned or alternate branches.
+ */
 export function getTokenTotals(ctx: ExtensionContext): TokenTotals {
   const totals: TokenTotals = { input: 0, output: 0, cost: 0 };
 
@@ -74,6 +94,15 @@ export function getTokenTotals(ctx: ExtensionContext): TokenTotals {
   return totals;
 }
 
+/**
+ * Format a raw token count as a short human-readable string.
+ *
+ * Thresholds:
+ *  - < 1 000         → exact number        (e.g. "847")
+ *  - 1 000 – 9 999   → one decimal place k  (e.g. "4.2k")
+ *  - 10 000 – 999 999 → rounded k           (e.g. "58k")
+ *  - ≥ 1 000 000     → one decimal place m  (e.g. "1.3m")
+ */
 export function formatCount(value: number): string {
   if (value < 1000) return `${value}`;
   if (value < 1_000_000) return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)}k`;
@@ -143,25 +172,27 @@ export function formatCodexChipData(
 
 	if (snapshot.primary) {
 		const pct = formatRemainingPercent(snapshot.primary);
+		const reset = formatResetCountdown(snapshot.primary, "5h");
 		const pctColor = active
 			? codexPercentColor(100 - clampPercent(snapshot.primary.usedPercent))
 			: COLOR.openAiInactive;
 		parts.push(
 			{ text: pct, fg: pctColor, bold: true },
-			{ text: "5h", fg: active ? COLOR.dim : COLOR.openAiInactive },
+			{ text: reset, fg: active ? COLOR.dim : COLOR.openAiInactive },
 		);
-		textParts.push(`${pct} 5h`);
+		textParts.push(`${pct} ${reset}`);
 	}
 	if (snapshot.secondary) {
 		const pct = formatRemainingPercent(snapshot.secondary);
+		const reset = formatResetCountdown(snapshot.secondary, "wk");
 		const pctColor = active
 			? codexPercentColor(100 - clampPercent(snapshot.secondary.usedPercent))
 			: COLOR.openAiInactive;
 		parts.push(
 			{ text: pct, fg: pctColor, bold: true },
-			{ text: "wk", fg: active ? COLOR.dim : COLOR.openAiInactive },
+			{ text: reset, fg: active ? COLOR.dim : COLOR.openAiInactive },
 		);
-		textParts.push(`${pct} wk`);
+		textParts.push(`${pct} ${reset}`);
 	}
 	if (parts.length === 0 && snapshot.credits) {
 		const creditsText = formatCredits(snapshot.credits);
@@ -216,6 +247,30 @@ function normalizedUsageKey(value: string | undefined): string | undefined {
 
 function formatRemainingPercent(window: import("./codex-usage/types.js").NormalizedRateLimitWindow): string {
 	return `${(100 - clampPercent(window.usedPercent)).toFixed(0)}%`;
+}
+
+function formatResetCountdown(
+	window: import("./codex-usage/types.js").NormalizedRateLimitWindow,
+	fallback: string,
+): string {
+	if (typeof window.resetsAt !== "number" || !Number.isFinite(window.resetsAt)) {
+		return fallback;
+	}
+
+	const remainingMs = window.resetsAt * 1000 - Date.now();
+	if (!Number.isFinite(remainingMs)) return fallback;
+	if (remainingMs <= 0) return "now";
+
+	const minuteMs = 60 * 1000;
+	const hourMs = 60 * minuteMs;
+	const dayMs = 24 * hourMs;
+	const windowMs = typeof window.windowMinutes === "number" ? window.windowMinutes * minuteMs : undefined;
+	const isLongWindow = windowMs !== undefined ? windowMs > dayMs : fallback === "wk";
+
+	if (remainingMs < hourMs) return `${Math.max(1, Math.ceil(remainingMs / minuteMs))}m`;
+	if (isLongWindow && remainingMs < dayMs) return `${Math.ceil(remainingMs / hourMs)}h`;
+	if (isLongWindow) return `${Math.ceil(remainingMs / dayMs)}d`;
+	return `${Math.ceil(remainingMs / hourMs)}h`;
 }
 
 function clampPercent(value: number): number {
