@@ -1,6 +1,6 @@
 {
   "name": "pi-infobar",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "High-contrast, readable info bar for the Pi coding agent.",
   "type": "module",
   "keywords": [
