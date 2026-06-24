@@ -21,7 +21,7 @@ import { getGitSnapshot } from "./git.js";
 import { COLOR, thinkingColor } from "./theme.js";
 import type { Chip, GitStatusPart, RuntimeState } from "./types.js";
 
-// ── Line Renderers ───────────────────────────────────────────────────
+// ── Line Renderers ────────────────────────────────────────────────────────────────────────────────────────────────
 
 /**
  * Render the **primary** footer line (line 2 of 4).
@@ -145,7 +145,7 @@ function fitLeftRight(
   return truncateToWidth(renderLeft(width), width, "");
 }
 
-// ── Path Cluster ─────────────────────────────────────────────────────
+// ── Path Cluster ──────────────────────────────────────────────────────────────────────────────────────────────────
 
 /**
  * Render the left-side "path cluster": a combination of a path chip, a git
@@ -184,10 +184,10 @@ function renderPathCluster(
     { worktreeWidth: 18, branchWidth: 18, includeStatus: true },
     { worktreeWidth: 12, branchWidth: 12, includeStatus: true },
     { worktreeWidth: 18, branchWidth: 18, includeStatus: false },
-    { worktreeWidth: 18, branchWidth: 0,  includeStatus: false },
-    { worktreeWidth: 0,  branchWidth: 18, includeStatus: true },
-    { worktreeWidth: 0,  branchWidth: 18, includeStatus: false },
-    { worktreeWidth: 0,  branchWidth: 0,  includeStatus: false },
+    { worktreeWidth: 18, branchWidth: 0, includeStatus: false },
+    { worktreeWidth: 0, branchWidth: 18, includeStatus: true },
+    { worktreeWidth: 0, branchWidth: 18, includeStatus: false },
+    { worktreeWidth: 0, branchWidth: 0, includeStatus: false },
   ]) {
     const worktreeChip =
       attempt.worktreeWidth > 0 && git.worktreeName
@@ -219,15 +219,15 @@ function renderPathCluster(
   );
 }
 
-// ── Path Chips ───────────────────────────────────────────────────────
+// ── Path Chips ────────────────────────────────────────────—————————————————————————————————————————————───────────
 
 /**
- * Render a path chip with the standard styling (sky-blue accent, bold value,
- * lifted panel background for the value area).
+ * Render a path chip with the standard styling (sky-blue accent, folder icon,
+ * bold value, and lifted panel background for the value area).
  */
 function renderPathChip(value: string): string {
   return renderChip(
-    chip("", value, COLOR.path, 1, {
+    chip("", value, COLOR.path, 1, {
       labelFg: COLOR.black,
       valueBg: COLOR.panelLift,
       boldValue: true,
@@ -259,7 +259,7 @@ function renderFittedPathChip(path: string, maxWidth: number): string {
   );
 }
 
-// ── Git Chips ────────────────────────────────────────────────────────
+// ── Git Chips ────────────────────────────────────────────—————————————————————————————————————————————───────────
 
 /**
  * Render a branch chip as a segmented chip: bold branch name followed by
@@ -282,7 +282,7 @@ function renderBranchChip(
     })),
   ];
 
-  return renderSegmentedChip("", segments, COLOR.git, {
+  return renderSegmentedChip("", segments, COLOR.git, {
     labelFg: COLOR.black,
     valueBg: COLOR.panelLift,
   });
@@ -300,7 +300,7 @@ function renderWorktreeChip(worktreeName: string, maxWidth: number): string {
   );
 }
 
-// ── Codex Chip ─────────────────────────────────────────────────────
+// ── Codex Chip ─────────────────────────────────────────────—————————————————————————————————————————————──────────
 
 /**
  * Render the OpenAI Codex usage chip for the usage line's left side.

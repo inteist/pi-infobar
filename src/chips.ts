@@ -49,10 +49,10 @@ export function renderChips(chips: Chip[]): string {
  * Render a single chip using Powerline-style arrow separators and ANSI colours.
  *
  * Visual structure (nerd-font glyphs):
- *   `` <label> `` <value> ``
+ *   `` <label> `` <value> ``
  *   └─ accent bg ─┘└── valueBg ──┘
  *
- * The leading and trailing `` glyphs create a "pill" shape by
+ * The leading `` and trailing `` glyphs create a "pill" shape by
  * transitioning between the panel background and the chip colours.
  *
  * Colour resolution:
@@ -66,11 +66,11 @@ export function renderChip(item: Chip): string {
   const valueBg = item.valueBg ?? COLOR.panel;
 
   return [
-    ansi("", { fg: item.accent }),                                          // opening arrow
+    ansi("", { fg: item.accent }), // opening arrow
     ansi(` ${item.label} `, { fg: labelFg, bg: item.accent, bold: true }), // label section
-    ansi("", { fg: item.accent, bg: valueBg }),                            // separator arrow
+    ansi("", { fg: item.accent, bg: valueBg }), // separator arrow
     ansi(` ${item.value} `, { fg: valueFg, bg: valueBg, bold: item.boldValue }), // value section
-    ansi("", { fg: valueBg }),                                             // closing arrow
+    ansi("", { fg: valueBg }), // closing arrow
   ].join("");
 }
 
@@ -108,12 +108,12 @@ export function renderSegmentedChip(
     .join("");
 
   return [
-    ansi("", { fg: accent }),                                          // opening arrow
-    ansi(` ${label} `, { fg: labelFg, bg: accent, bold: true }),      // label section
-    ansi("", { fg: accent, bg: valueBg }),                            // separator arrow
-    ansi(" ", { bg: valueBg }),                                        // left padding
+    ansi("", { fg: accent }), // opening arrow
+    ansi(` ${label} `, { fg: labelFg, bg: accent, bold: true }), // label section
+    ansi("", { fg: accent, bg: valueBg }), // separator arrow
+    ansi(" ", { bg: valueBg }), // left padding
     value,
-    ansi(" ", { bg: valueBg }),                                        // right padding
-    ansi("", { fg: valueBg }),                                        // closing arrow
+    ansi(" ", { bg: valueBg }), // right padding
+    ansi("", { fg: valueBg }), // closing arrow
   ].join("");
 }
