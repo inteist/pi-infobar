@@ -1,0 +1,9 @@
+version = 1
+
+[[task]]
+id = "publish"
+title = "Publish to NPM"
+description = "Install dependencies, run checks, and publish package"
+command = "npm run deploy"
+cwd = "."
+icon = "fa_upload"
