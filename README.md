@@ -1,6 +1,6 @@
 ![pi-infobar banner](./pi-infobar.png)
 
-# pi-infobar - Pi extension
+# pi-infobar - Pi Coding Agent Extension
 
 High-contrast two-row info bar for the Pi coding agent.
 
