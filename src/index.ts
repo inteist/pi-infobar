@@ -184,9 +184,9 @@ export default function piInfobar(pi: ExtensionAPI): void {
          *
          * Lines:
          *   1. Separator (thin rule)
-         *   2. Primary line  – path + branch + model / thinking / context chips
+         *   2. Primary line  – path + branch + provider/model + thinking chips
          *   3. Spacer        – blank separator for visual breathing room
-         *   4. Usage line    – Codex usage chip + token counts + cost
+         *   4. Usage line    – Codex usage chip + context + token counts + cost
          *
          * Memoised: if both `width` and `runtime.renderVersion` are unchanged
          * from the previous call, the cached string array is returned directly.

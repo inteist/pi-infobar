@@ -4,7 +4,11 @@ import type { CodexUsageManager } from "./codex-usage/index.js";
 
 // ── Thinking ─────────────────────────────────────────────────────────
 
-export type ThinkingLevel = ReturnType<ExtensionAPI["getThinkingLevel"]>;
+// Keep the extension compatible with Pi versions that introduced `max` after
+// the locally installed SDK types. At runtime the host Pi owns this value.
+export type ThinkingLevel =
+  | ReturnType<ExtensionAPI["getThinkingLevel"]>
+  | "max";
 
 // ── Runtime ──────────────────────────────────────────────────────────
 

@@ -74,6 +74,8 @@ export const COLOR = {
   thinkHigh: "#f97316",
   /** Extended (x-high) thinking budget. */
   thinkXhigh: "#dc46dc",
+  /** Maximum thinking budget. */
+  thinkMax: "#f43f5e",
 
   // ── Codex / OpenAI ───────────────────────────────────────────────
   /** Active OpenAI Codex chip accent. */
@@ -143,7 +145,14 @@ export function thinkingColor(level: ThinkingLevel): string {
       return COLOR.thinkHigh;
     case "xhigh":
       return COLOR.thinkXhigh;
+    case "max":
+      return COLOR.thinkMax;
   }
+
+  // The extension may be loaded by a newer Pi host with a thinking level that
+  // this version does not know yet. Never pass an undefined accent to the ANSI
+  // renderer; reuse the highest known color until explicit support is added.
+  return COLOR.thinkMax;
 }
 
 /**

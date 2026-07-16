@@ -32,9 +32,8 @@ The path segment stays as the normal path. Linked worktrees get a separate green
 
 #### Right:
 
-- active model in light blue;
-- thinking level with effort-specific color;
-- context percentage with a stepped color ramp from transparent/green through yellow, orange, and red by 60%.
+- active model in light blue, labeled with its provider;
+- thinking level with effort-specific color.
 
 A subtle separator sits between the two information rows.
 
@@ -42,8 +41,9 @@ A subtle separator sits between the two information rows.
 
 #### Left: Codex subscription usage
 
-#### Right: token usage and cost
+#### Right: context, token usage, and cost
 
+- context percentage, first, with a stepped color ramp from transparent/green through yellow, orange, and red by 60%;
 - `↑` tokens sent;
 - `↓` tokens received;
 - dark-green `$` estimated cost.

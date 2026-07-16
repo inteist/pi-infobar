@@ -25,7 +25,7 @@ import type { ThinkingLevel, TokenTotals } from "./types.js";
 
 /**
  * Snapshot the current context-window utilization as a display label and
- * a color hint for the CTX chip.
+ * a color hint for the second-row CTX chip.
  *
  * Returns `{ label: "?", color: contextTransparent }` when the usage data is
  * unavailable (e.g. model does not report token counts yet).
@@ -48,7 +48,7 @@ export function contextSnapshot(ctx: ExtensionContext): {
 // ── Model ────────────────────────────────────────────────────────────
 
 /**
- * Return a display-ready model name for the MODEL chip.
+ * Return a display-ready model name for the provider/model chip.
  * Prefers the model's `id` over its `name` (ids are more stable identifiers).
  */
 export function modelName(ctx: ExtensionContext): string {

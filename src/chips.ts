@@ -8,7 +8,7 @@ import { COLOR } from "./theme.js";
  * Construct a {@link Chip} data object from its constituent parts.
  *
  * @param label     Short uppercase label shown in the accent-coloured left section
- *                  (e.g. `"MODEL"`, `"CTX"`).  Pass `""` for label-less chips.
+ *                  (e.g. `"anthropic"`, `"CTX"`). Pass `""` for label-less chips.
  * @param value     The dynamic value shown in the value section (e.g. `"claude-3-5"`).
  * @param accent    Hex colour for the label background and chip borders.
  * @param priority  Render priority used by `fitLeftRight` when dropping chips on
