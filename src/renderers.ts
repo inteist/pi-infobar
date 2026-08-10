@@ -294,7 +294,7 @@ function renderBranchChip(
  */
 function renderWorktreeChip(worktreeName: string, maxWidth: number): string {
   return renderChip(
-    chip("󰙅", shorten(worktreeName, maxWidth), COLOR.git, 2, {
+    chip("󰙅", shorten(worktreeName, maxWidth), COLOR.worktree, 2, {
       labelFg: COLOR.black,
     }),
   );

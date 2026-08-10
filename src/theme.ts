@@ -98,6 +98,8 @@ export const COLOR = {
   gitDeleted: "#ef4444",
   /** Renamed/copied-file indicator (`»`). */
   gitRenamed: "#a78bfa",
+  /** Linked-worktree chip accent (vivid orange, distinct from the branch green). */
+  worktree: "#ff7a00",
 
   // ── Usage ────────────────────────────────────────────────────────
   /** Token count chip colour (input ↑ / output ↓). */
