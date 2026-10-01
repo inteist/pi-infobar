@@ -41,11 +41,12 @@ A subtle separator sits between the two information rows.
 
 #### Left: Codex subscription usage
 
-#### Right: context, token usage, and cost
+#### Right: context, token usage, finish time, and cost
 
-- context percentage, first, with a stepped color ramp from transparent/green through yellow, orange, and red by 60%;
-- `↑` tokens sent;
-- `↓` tokens received;
+- last turn finish time as plain local `HH:mm:ss` (or `—` before the first finish);
+- context percentage with a stepped color ramp from transparent/green through yellow, orange, and red by 60%;
+- plain `↑` tokens sent;
+- plain `↓` tokens received;
 - dark-green `$` estimated cost.
 
 ## Commands

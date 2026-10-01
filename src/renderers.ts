@@ -86,8 +86,8 @@ export function renderUsageLine(
       valueBg: COLOR.panelLift,
       boldValue: true,
     }),
-    chip("↑", formatCount(totals.input), COLOR.token, 1),
-    chip("↓", formatCount(totals.output), COLOR.token, 1),
+    plain("↑", formatCount(totals.input), COLOR.token, 1),
+    plain("↓", formatCount(totals.output), COLOR.token, 1),
     chip("$", formatCost(totals.cost), COLOR.cost, 2, { boldValue: true }),
   ];
 
