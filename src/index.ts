@@ -199,7 +199,7 @@ export default function piInfobar(pi: ExtensionAPI): void {
           }
 
           cachedLines = [
-            renderSeparatorLine(width),
+            // renderSeparatorLine(width),
             renderPrimaryLine(width, ctx, footerData, runtime),
             renderSeparatorLine(width, " "),
             renderUsageLine(width, ctx, footerData, runtime),
