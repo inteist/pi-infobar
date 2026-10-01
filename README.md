@@ -41,11 +41,12 @@ A subtle separator sits between the two information rows.
 
 #### Left: Codex subscription usage
 
-#### Right: context, token usage, and cost
+#### Right: context, token usage, finish time, and cost
 
-- context percentage, first, with a stepped color ramp from transparent/green through yellow, orange, and red by 60%;
-- `↑` tokens sent;
-- `↓` tokens received;
+- last turn finish time as plain local `HH:mm:ss` (or `—` before the first finish);
+- context percentage with a stepped color ramp from transparent/green through yellow, orange, and red by 60%;
+- plain `↑` tokens sent;
+- plain `↓` tokens received;
 - dark-green `$` estimated cost.
 
 ## Commands
@@ -108,8 +109,8 @@ Low-level terminal rendering primitives:
 
 The chip UI component system:
 
-- `chip()` factory
-- `renderChip()`, `renderChips()`
+- `chip()` and `plain()` factories — identical arguments and layout priorities; swap the factory in `src/renderers.ts` to switch presentation. Plain items ignore backgrounds and draw no borders or padding. You can also set `style: "plain"` or `style: "chip"` on an item.
+- `renderChip()`, `renderPlain()`, `renderChips()`
 - `renderSegmentedChip()`
 
 Pure data formatting functions:

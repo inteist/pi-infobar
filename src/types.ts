@@ -18,6 +18,7 @@ export interface RuntimeState {
   renderVersion: number;
   context: { label: string; color: string };
   tokenTotals: TokenTotals;
+  lastTurnFinishedAt?: number;
   codexUsage: CodexUsageManager;
 }
 
@@ -32,6 +33,7 @@ export interface TokenTotals {
 // ── Chip UI ──────────────────────────────────────────────────────────
 
 export interface Chip {
+  style?: "chip" | "plain";
   label: string;
   value: string;
   accent: string;

@@ -15,6 +15,7 @@ import {
 } from "./codex-usage/index.js";
 import {
   contextSnapshot,
+  getLastTurnFinishedAt,
   getTokenTotals,
 } from "./format.js";
 import {
@@ -186,19 +187,22 @@ export default function piInfobar(pi: ExtensionAPI): void {
          *   1. Separator (thin rule)
          *   2. Primary line  – path + branch + provider/model + thinking chips
          *   3. Spacer        – blank separator for visual breathing room
-         *   4. Usage line    – Codex usage chip + context + token counts + cost
+         *   4. Usage line    – Codex usage chip + context + tokens + finish time + cost
          *
          * Memoised: if both `width` and `runtime.renderVersion` are unchanged
          * from the previous call, the cached string array is returned directly.
          */
         render(width: number): string[] {
           if (width <= 0) return [""];
-          if (cachedWidth === width && cachedVersion === runtime.renderVersion) {
+          if (
+            cachedWidth === width &&
+            cachedVersion === runtime.renderVersion
+          ) {
             return cachedLines;
           }
 
           cachedLines = [
-            renderSeparatorLine(width),
+            // renderSeparatorLine(width),
             renderPrimaryLine(width, ctx, footerData, runtime),
             renderSeparatorLine(width, " "),
             renderUsageLine(width, ctx, footerData, runtime),
@@ -307,6 +311,7 @@ export default function piInfobar(pi: ExtensionAPI): void {
    */
   pi.on("session_start", (_event, ctx) => {
     runtime.thinkingLevel = pi.getThinkingLevel();
+    runtime.lastTurnFinishedAt = getLastTurnFinishedAt(ctx);
     updateFooterStats(ctx);
     installFooter(ctx);
     refresh();
@@ -320,6 +325,7 @@ export default function piInfobar(pi: ExtensionAPI): void {
    * stats and Codex usage.
    */
   pi.on("session_tree", (_event, ctx) => {
+    runtime.lastTurnFinishedAt = getLastTurnFinishedAt(ctx);
     installFooter(ctx);
     refreshStats(ctx);
     refreshCodexUsage(ctx);
@@ -349,8 +355,11 @@ export default function piInfobar(pi: ExtensionAPI): void {
     refreshCodexUsage(ctx, false, event.model);
   });
 
-  /** `agent_end` / `turn_end` – a turn completed; update token/cost totals. */
-  pi.on("agent_end", (_event, ctx) => refreshStats(ctx));
+  /** Record the finish only when the whole agent run ends, not after each tool turn. */
+  pi.on("agent_end", (_event, ctx) => {
+    runtime.lastTurnFinishedAt = Date.now();
+    refreshStats(ctx);
+  });
   pi.on("turn_end", (_event, ctx) => refreshStats(ctx));
 
   /**
