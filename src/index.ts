@@ -194,7 +194,10 @@ export default function piInfobar(pi: ExtensionAPI): void {
          */
         render(width: number): string[] {
           if (width <= 0) return [""];
-          if (cachedWidth === width && cachedVersion === runtime.renderVersion) {
+          if (
+            cachedWidth === width &&
+            cachedVersion === runtime.renderVersion
+          ) {
             return cachedLines;
           }
 
