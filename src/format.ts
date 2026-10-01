@@ -146,6 +146,30 @@ export function formatCost(value: number): string {
   return value >= 1 ? value.toFixed(2) : value.toFixed(3);
 }
 
+/** Local clock time of the last completed turn, or a dash before any finish. */
+export function formatFinishTime(timestamp: number | undefined): string {
+  if (timestamp === undefined) return "—";
+  const date = new Date(timestamp);
+  if (!Number.isFinite(date.getTime())) return "—";
+  return [date.getHours(), date.getMinutes(), date.getSeconds()]
+    .map((part) => String(part).padStart(2, "0"))
+    .join(":");
+}
+
+/** Restore the latest assistant completion time from the active branch. */
+export function getLastTurnFinishedAt(ctx: ExtensionContext): number | undefined {
+  const branch = ctx.sessionManager.getBranch();
+  for (let index = branch.length - 1; index >= 0; index -= 1) {
+    const entry = branch[index];
+    if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+    // Entry timestamps are recorded when messages are appended, unlike the
+    // message's own timestamp, which can reflect the start of generation.
+    const timestamp = Date.parse(entry.timestamp);
+    if (Number.isFinite(timestamp)) return timestamp;
+  }
+  return undefined;
+}
+
 // ── Codex Status ─────────────────────────────────────────────────────
 
 /**

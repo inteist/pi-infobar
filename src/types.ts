@@ -18,6 +18,7 @@ export interface RuntimeState {
   renderVersion: number;
   context: { label: string; color: string };
   tokenTotals: TokenTotals;
+  lastTurnFinishedAt?: number;
   codexUsage: CodexUsageManager;
 }
 

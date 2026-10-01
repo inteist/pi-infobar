@@ -5,12 +5,13 @@ import type {
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 import { ansi, readableTextOn } from "./ansi.js";
-import { chip, renderChip, renderChips, renderSegmentedChip } from "./chips.js";
+import { chip, plain, renderChip, renderChips, renderSegmentedChip } from "./chips.js";
 import { isOpenAICodexModel } from "./codex-usage/index.js";
 import {
   formatCodexChipData,
   formatCost,
   formatCount,
+  formatFinishTime,
   formatThinking,
   formatWorkingPath,
   modelName,
@@ -65,10 +66,11 @@ export function renderPrimaryLine(
  * Render the **usage** footer line (line 4 of 4).
  *
  * Left side:  Codex usage chip (OpenAI rate-limit / credits).
- * Right side: CTX | ↑ input tokens | ↓ output tokens | $ cost.
+ * Right side: finish time | CTX | ↑ input tokens | ↓ output tokens | $ cost.
+ * Time and tokens are plain text; context and cost keep their chip styling.
  *
- * The cost chip is priority 2 (dropped first) so context and token counts stay
- * visible on narrow terminals.
+ * Time and cost are priority 2 (dropped first) so context and token counts
+ * stay visible on narrow terminals.
  */
 export function renderUsageLine(
   width: number,
@@ -79,7 +81,7 @@ export function renderUsageLine(
   const totals = runtime.tokenTotals;
   const context = runtime.context;
   const right: Chip[] = [
-    // Context is first on the second row so it leads the usage metrics.
+    plain("", formatFinishTime(runtime.lastTurnFinishedAt), COLOR.token, 2),
     chip("CTX", context.label, context.color, 1, {
       valueBg: COLOR.panelLift,
       boldValue: true,
