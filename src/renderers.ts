@@ -39,9 +39,11 @@ export function renderPrimaryLine(
   footerData: ReadonlyFooterDataProvider,
   runtime: RuntimeState,
 ): string {
+  const provider = ctx.model?.provider ?? "PROVIDER";
+  const providerLabel = provider === "openai-codex" ? "OpenAI" : provider;
   const right: Chip[] = [
     // Priority 1: always shown – provider + model is the most important identifier.
-    chip(ctx.model?.provider ?? "PROVIDER", modelName(ctx), COLOR.model, 1, {
+    chip(providerLabel, modelName(ctx), COLOR.model, 1, {
       valueBg: COLOR.panelLift,
       boldValue: true,
     }),
