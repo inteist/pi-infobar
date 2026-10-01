@@ -2,6 +2,10 @@ import type { Chip } from "./types.js";
 import { ansi, readableTextOn } from "./ansi.js";
 import { COLOR } from "./theme.js";
 
+type ChipOptions = Partial<
+  Pick<Chip, "style" | "labelFg" | "valueFg" | "valueBg" | "boldValue">
+>;
+
 // ── Chip Factory ─────────────────────────────────────────────────────
 
 /**
@@ -13,16 +17,17 @@ import { COLOR } from "./theme.js";
  * @param accent    Hex colour for the label background and chip borders.
  * @param priority  Render priority used by `fitLeftRight` when dropping chips on
  *                  narrow terminals: 1 = always shown, 2 = dropped second, 3 = first.
- * @param options   Optional overrides for foreground/background colours and bold.
+ * @param options   Optional overrides for style, foreground/background colours and bold.
  */
 export function chip(
   label: string,
   value: string,
   accent: string,
   priority: 1 | 2 | 3,
-  options: Partial<Pick<Chip, "labelFg" | "valueFg" | "valueBg" | "boldValue">> = {},
+  options: ChipOptions = {},
 ): Chip {
   return {
+    style: options.style ?? "chip",
     label,
     value,
     accent,
@@ -34,10 +39,39 @@ export function chip(
   };
 }
 
+/**
+ * Construct a plain-text item with the same arguments and layout priority as
+ * `chip()`. No borders, backgrounds, or padding are drawn; background options
+ * are ignored. Swap `plain()` and `chip()` to change presentation.
+ */
+export function plain(
+  label: string,
+  value: string,
+  accent: string,
+  priority: 1 | 2 | 3,
+  options: ChipOptions = {},
+): Chip {
+  return chip(label, value, accent, priority, { ...options, style: "plain" });
+}
+
+/** Render a label and value as coloured text, without any chip chrome. */
+export function renderPlain(item: Chip): string {
+  const label = item.label
+    ? ansi(item.label, { fg: item.labelFg ?? item.accent, bold: true })
+    : "";
+  const value = item.value
+    ? ansi(item.value, {
+        fg: item.valueFg ?? item.accent,
+        bold: item.boldValue,
+      })
+    : "";
+  return [label, value].filter(Boolean).join(" ");
+}
+
 // ── Chip Renderers ───────────────────────────────────────────────────
 
 /**
- * Render an array of chips as a space-separated string.
+ * Render an array of chip or plain items as a space-separated string.
  * Each chip is rendered with `renderChip`; callers are responsible for
  * filtering out chips that should not be shown.
  */
@@ -46,7 +80,8 @@ export function renderChips(chips: Chip[]): string {
 }
 
 /**
- * Render a single chip using Powerline-style arrow separators and ANSI colours.
+ * Render an item as plain text when requested, otherwise as a chip using
+ * Powerline-style arrow separators and ANSI colours.
  *
  * Visual structure (nerd-font glyphs):
  *   `` <label> `` <value> ``
@@ -61,6 +96,8 @@ export function renderChips(chips: Chip[]): string {
  *  - `valueBg` defaults to `COLOR.panel` (the standard footer panel colour).
  */
 export function renderChip(item: Chip): string {
+  if (item.style === "plain") return renderPlain(item);
+
   const labelFg = item.labelFg ?? readableTextOn(item.accent);
   const valueFg = item.valueFg ?? item.accent;
   const valueBg = item.valueBg ?? COLOR.panel;

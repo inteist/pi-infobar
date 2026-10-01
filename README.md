@@ -108,8 +108,8 @@ Low-level terminal rendering primitives:
 
 The chip UI component system:
 
-- `chip()` factory
-- `renderChip()`, `renderChips()`
+- `chip()` and `plain()` factories — identical arguments and layout priorities; swap the factory in `src/renderers.ts` to switch presentation. Plain items ignore backgrounds and draw no borders or padding. You can also set `style: "plain"` or `style: "chip"` on an item.
+- `renderChip()`, `renderPlain()`, `renderChips()`
 - `renderSegmentedChip()`
 
 Pure data formatting functions:

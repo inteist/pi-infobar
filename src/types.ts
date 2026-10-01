@@ -32,6 +32,7 @@ export interface TokenTotals {
 // ── Chip UI ──────────────────────────────────────────────────────────
 
 export interface Chip {
+  style?: "chip" | "plain";
   label: string;
   value: string;
   accent: string;
