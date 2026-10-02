@@ -45,9 +45,14 @@ A subtle separator sits between the two information rows.
 
 - last turn finish time as plain local `HH:mm:ss` (or `—` before the first finish);
 - context percentage with a stepped color ramp from transparent/green through yellow, orange, and red by 60%;
-- plain `↑` tokens sent;
-- plain `↓` tokens received;
-- dark-green `$` estimated cost.
+- plain `↑` uncached input tokens;
+- plain `↓` output tokens;
+- plain `R` cache-read input tokens, shown only when nonzero;
+- plain `W` cache-write input tokens, shown only when nonzero;
+- dark-green `$` estimated cost, including cache reads and writes.
+
+Token counters and cost accumulate across the active session branch. For Codex
+subscriptions, `$` is an API-equivalent estimate, not a subscription charge.
 
 ## Commands
 
