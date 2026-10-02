@@ -160,14 +160,25 @@ export function formatCost(value: number): string {
   return value >= 1 ? value.toFixed(2) : value.toFixed(3);
 }
 
-/** Local clock time of the last completed turn, or a dash before any finish. */
+/** Octicons clock glyph shown between the finish date and time. */
+const CLOCK_ICON = "";
+
+/**
+ * Local date and clock time of the last completed turn (e.g. "Oct 2  15:32"),
+ * or a dash before any finish.
+ */
 export function formatFinishTime(timestamp: number | undefined): string {
   if (timestamp === undefined) return "—";
   const date = new Date(timestamp);
   if (!Number.isFinite(date.getTime())) return "—";
-  return [date.getHours(), date.getMinutes(), date.getSeconds()]
+  const day = date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+  const time = [date.getHours(), date.getMinutes()]
     .map((part) => String(part).padStart(2, "0"))
     .join(":");
+  return `${day} ${CLOCK_ICON} ${time}`;
 }
 
 /** Restore the latest assistant completion time from the active branch. */

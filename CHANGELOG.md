@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Show the last turn finish time as `Oct 2  15:32`: the date, a clock icon, and the time without seconds.
 - Replaced the static `MODEL` chip label with the active model provider.
 - Moved the `CTX` chip to the start of the second row's right side.
 

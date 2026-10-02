@@ -43,7 +43,7 @@ A subtle separator sits between the two information rows.
 
 #### Right: context, token usage, finish time, and cost
 
-- last turn finish time as plain local `HH:mm:ss` (or `—` before the first finish);
+- last turn finish date and time as plain local `MMM d  HH:mm`, such as `Oct 2  15:32` (or `—` before the first finish);
 - context percentage with a stepped color ramp from transparent/green through yellow, orange, and red by 60%;
 - plain `↑` uncached input tokens;
 - plain `↓` output tokens;
