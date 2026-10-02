@@ -27,6 +27,8 @@ export interface RuntimeState {
 export interface TokenTotals {
   input: number;
   output: number;
+  cacheRead: number;
+  cacheWrite: number;
   cost: number;
 }
 

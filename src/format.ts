@@ -94,8 +94,8 @@ export function formatThinking(level: ThinkingLevel): string {
 // ── Tokens / Cost ────────────────────────────────────────────────────
 
 /**
- * Aggregate input tokens, output tokens, and cost across all assistant
- * messages in the current session branch.
+ * Aggregate uncached input, output, cache-read/write tokens, and total cost
+ * across all assistant messages in the current session branch.
  *
  * Only `role === "assistant"` messages carry usage data; user and system
  * messages are skipped.  The branch is the linear path from the root to the
@@ -103,18 +103,32 @@ export function formatThinking(level: ThinkingLevel): string {
  * without counting pruned or alternate branches.
  */
 export function getTokenTotals(ctx: ExtensionContext): TokenTotals {
-  const totals: TokenTotals = { input: 0, output: 0, cost: 0 };
+  const totals: TokenTotals = {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    cost: 0,
+  };
 
   for (const entry of ctx.sessionManager.getBranch()) {
     if (entry.type !== "message") continue;
     const message = entry.message as {
       role?: string;
-      usage?: { input?: number; output?: number; cost?: { total?: number } };
+      usage?: {
+        input?: number;
+        output?: number;
+        cacheRead?: number;
+        cacheWrite?: number;
+        cost?: { total?: number };
+      };
     };
     if (message.role !== "assistant") continue;
 
     totals.input += message.usage?.input ?? 0;
     totals.output += message.usage?.output ?? 0;
+    totals.cacheRead += message.usage?.cacheRead ?? 0;
+    totals.cacheWrite += message.usage?.cacheWrite ?? 0;
     totals.cost += message.usage?.cost?.total ?? 0;
   }
 
