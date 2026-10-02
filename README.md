@@ -6,6 +6,8 @@ High-contrast two-row info bar for the Pi coding agent.
 
 This extension replaces Pi's default footer with a cleaner info bar layout inspired by a Starship-style prompt. It keeps the most important information visually dominant and avoids low-value activity labels like `status`, `idle`, or `ready`.
 
+Requires Pi `1.0.0` or later.
+
 ## Install
 
 ```bash
