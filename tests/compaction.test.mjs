@@ -13,6 +13,7 @@ let CodexUsageManager;
 let stripAnsi;
 let contextSnapshot;
 let testSdk;
+let queryUsage;
 
 // Exercise the real extension and renderers without adding a TS test runner.
 before(async () => {
@@ -50,6 +51,7 @@ before(async () => {
   const load = (path) => import(pathToFileURL(join(buildDir, path)).href);
   ({ default: piInfobar } = await load("src/index.js"));
   ({ CodexUsageManager } = await load("src/codex-usage/manager.js"));
+  ({ queryUsage } = await load("src/codex-usage/query.js"));
   ({ stripAnsi } = await load("src/ansi.js"));
   ({ contextSnapshot } = await load("src/format.js"));
   ({ testSdk } = await load("node_modules/@earendil-works/pi-coding-agent/index.mjs"));
@@ -346,6 +348,31 @@ test("reported zero usage is preserved without attempting estimation", (t) => {
   harness.setUsage({ tokens: 0, contextWindow: 1_048_576, percent: 0 });
   t.mock.method(testSdk, "buildSessionProjection", () => { throw new Error("Unexpected estimate"); });
   assert.equal(harness.snapshot().label, "0%");
+});
+
+test("Codex usage requests omit null headers returned by the Pi 1.0 auth API", async (t) => {
+  const harness = createHarness(t);
+  harness.ctx.model = { provider: "openai-codex", id: "test-model" };
+  harness.ctx.modelRegistry = {
+    getAvailable: () => [],
+    getAll: () => [],
+    getApiKeyAndHeaders: async () => ({
+      ok: true, apiKey: "test-token",
+      headers: { Authorization: "Bearer test-token", "X-Removed": null, "X-Kept": "yes" },
+    }),
+  };
+  let headers;
+  t.mock.method(globalThis, "fetch", async (_url, init) => {
+    headers = init.headers;
+    return new Response(JSON.stringify({
+      rate_limit: { primary_window: { used_percent: 10, limit_window_seconds: 18_000 } },
+    }), { status: 200 });
+  });
+  const result = await queryUsage(harness.ctx, { timeoutMs: 1_000 });
+  assert.equal(result.ok, true);
+  assert.equal(headers["X-Kept"], "yes");
+  assert.equal(headers.Authorization, "Bearer test-token");
+  assert.ok(!("X-Removed" in headers));
 });
 
 test("unavailable or invalid context windows remain unknown", (t) => {
