@@ -65,7 +65,7 @@ export function renderPlain(item: Chip): string {
         bold: item.boldValue,
       })
     : "";
-  return [label, value].filter(Boolean).join(" ");
+  return [label, value].filter(Boolean).join("");
 }
 
 // ── Chip Renderers ───────────────────────────────────────────────────
