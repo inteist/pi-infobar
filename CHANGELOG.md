@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Show the last turn finish time as `Oct 2  15:32`: the date, a clock icon, and the time without seconds.
 - Show an estimated context percentage (`~N%`) after compaction until fresh model usage is available, counting the summary, retained messages, and system prompt; fall back to `?` if estimation fails.
 - Require Pi `1.0.0` or later, update the development SDK, and use its session projection directly without older-version prompt fallbacks.
+- Run regression tests as part of the pre-publish check.
 - Replaced the static `MODEL` chip label with the active model provider.
 - Moved the `CTX` chip to the start of the second row's right side.
 
