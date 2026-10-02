@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Separate cumulative cache-read (`R`) and cache-write (`W`) token counters, shown only when nonzero.
+
 ### Changed
 
 - Replaced the static `MODEL` chip label with the active model provider.

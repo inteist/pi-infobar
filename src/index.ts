@@ -62,7 +62,7 @@ export default function piInfobar(pi: ExtensionAPI): void {
     thinkingLevel: "off",
     renderVersion: 0,
     context: { label: "?", color: "" },
-    tokenTotals: { input: 0, output: 0, cost: 0 },
+    tokenTotals: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 },
     codexUsage,
   };
 

@@ -68,7 +68,8 @@ export function renderPrimaryLine(
  * Render the **usage** footer line (line 4 of 4).
  *
  * Left side:  Codex usage chip (OpenAI rate-limit / credits).
- * Right side: finish time | CTX | ↑ input tokens | ↓ output tokens | $ cost.
+ * Right side: finish time | CTX | ↑ uncached input | ↓ output | R cache read |
+ * W cache write | $ cost. Cache counters are shown only when nonzero.
  * Time and tokens are plain text; context and cost keep their chip styling.
  *
  * Time and cost are priority 2 (dropped first) so context and token counts
@@ -90,6 +91,12 @@ export function renderUsageLine(
     }),
     plain("↑", formatCount(totals.input), COLOR.token, 1),
     plain("↓", formatCount(totals.output), COLOR.token, 1),
+    ...(totals.cacheRead > 0
+      ? [plain("R", formatCount(totals.cacheRead), COLOR.token, 1)]
+      : []),
+    ...(totals.cacheWrite > 0
+      ? [plain("W", formatCount(totals.cacheWrite), COLOR.token, 1)]
+      : []),
     chip("$", formatCost(totals.cost), COLOR.cost, 2, { boldValue: true }),
   ];
 

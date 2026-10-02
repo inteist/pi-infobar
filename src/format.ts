@@ -94,8 +94,8 @@ export function formatThinking(level: ThinkingLevel): string {
 // ── Tokens / Cost ────────────────────────────────────────────────────
 
 /**
- * Aggregate input tokens, output tokens, and cost across all assistant
- * messages in the current session branch.
+ * Aggregate uncached input, output, cache-read/write tokens, and total cost
+ * across all assistant messages in the current session branch.
  *
  * Only `role === "assistant"` messages carry usage data; user and system
  * messages are skipped.  The branch is the linear path from the root to the
@@ -103,18 +103,32 @@ export function formatThinking(level: ThinkingLevel): string {
  * without counting pruned or alternate branches.
  */
 export function getTokenTotals(ctx: ExtensionContext): TokenTotals {
-  const totals: TokenTotals = { input: 0, output: 0, cost: 0 };
+  const totals: TokenTotals = {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    cost: 0,
+  };
 
   for (const entry of ctx.sessionManager.getBranch()) {
     if (entry.type !== "message") continue;
     const message = entry.message as {
       role?: string;
-      usage?: { input?: number; output?: number; cost?: { total?: number } };
+      usage?: {
+        input?: number;
+        output?: number;
+        cacheRead?: number;
+        cacheWrite?: number;
+        cost?: { total?: number };
+      };
     };
     if (message.role !== "assistant") continue;
 
     totals.input += message.usage?.input ?? 0;
     totals.output += message.usage?.output ?? 0;
+    totals.cacheRead += message.usage?.cacheRead ?? 0;
+    totals.cacheWrite += message.usage?.cacheWrite ?? 0;
     totals.cost += message.usage?.cost?.total ?? 0;
   }
 
@@ -128,13 +142,13 @@ export function getTokenTotals(ctx: ExtensionContext): TokenTotals {
  *  - < 1 000         → exact number        (e.g. "847")
  *  - 1 000 – 9 999   → one decimal place k  (e.g. "4.2k")
  *  - 10 000 – 999 999 → rounded k           (e.g. "58k")
- *  - ≥ 1 000 000     → one decimal place m  (e.g. "1.3m")
+ *  - ≥ 1 000 000     → one decimal place M  (e.g. "1.3M")
  */
 export function formatCount(value: number): string {
   if (value < 1000) return `${value}`;
   if (value < 1_000_000)
     return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)}k`;
-  return `${(value / 1_000_000).toFixed(1)}m`;
+  return `${(value / 1_000_000).toFixed(1)}M`;
 }
 
 /**
