@@ -142,13 +142,13 @@ export function getTokenTotals(ctx: ExtensionContext): TokenTotals {
  *  - < 1 000         → exact number        (e.g. "847")
  *  - 1 000 – 9 999   → one decimal place k  (e.g. "4.2k")
  *  - 10 000 – 999 999 → rounded k           (e.g. "58k")
- *  - ≥ 1 000 000     → one decimal place m  (e.g. "1.3m")
+ *  - ≥ 1 000 000     → one decimal place M  (e.g. "1.3M")
  */
 export function formatCount(value: number): string {
   if (value < 1000) return `${value}`;
   if (value < 1_000_000)
     return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)}k`;
-  return `${(value / 1_000_000).toFixed(1)}m`;
+  return `${(value / 1_000_000).toFixed(1)}M`;
 }
 
 /**
