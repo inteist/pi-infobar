@@ -1,6 +1,6 @@
-import type { Chip } from "./types.js";
 import { ansi, readableTextOn } from "./ansi.js";
 import { COLOR } from "./theme.js";
+import type { Chip } from "./types.js";
 
 type ChipOptions = Partial<
   Pick<Chip, "style" | "labelFg" | "valueFg" | "valueBg" | "boldValue">
