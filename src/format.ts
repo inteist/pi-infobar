@@ -1,6 +1,10 @@
 import { homedir } from "node:os";
 
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import {
+  estimateTokens,
+  getLatestCompactionEntry,
+  type ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 import type {
@@ -27,22 +31,65 @@ import type { ThinkingLevel, TokenTotals } from "./types.js";
  * Snapshot the current context-window utilization as a display label and
  * a color hint for the second-row CTX chip.
  *
- * Returns `{ label: "?", color: contextTransparent }` when the usage data is
- * unavailable (e.g. model does not report token counts yet).
+ * After compaction, estimate the rebuilt context (summary + retained messages)
+ * until Pi reports fresh usage. The `~` prefix distinguishes estimated readings.
+ * Returns `?` when neither reported usage nor a compaction estimate is available.
  */
 export function contextSnapshot(ctx: ExtensionContext): {
   label: string;
   color: string;
 } {
   const usage = ctx.getContextUsage();
-  const percent =
-    typeof usage?.percent === "number" ? usage.percent : undefined;
-  if (percent === undefined)
-    return { label: "?", color: COLOR.contextTransparent };
+  if (typeof usage?.percent === "number" && Number.isFinite(usage.percent))
+    return formatContext(usage.percent, false);
 
-  // Clamp to [0, 100] defensively – the API could theoretically return >100%.
+  const percent = estimateCompactedPercent(ctx, usage?.contextWindow);
+  if (percent === undefined) return UNKNOWN_CONTEXT;
+  return formatContext(percent, true);
+}
+
+const UNKNOWN_CONTEXT = Object.freeze({
+  label: "?",
+  color: COLOR.contextTransparent,
+});
+
+/** Estimate persisted compacted context; request-time extension edits are not reflected. */
+function estimateCompactedPercent(
+  ctx: ExtensionContext,
+  contextWindow: number | undefined,
+): number | undefined {
+  if (!contextWindow || !Number.isFinite(contextWindow) || contextWindow <= 0)
+    return undefined;
+
+  try {
+    const branch = ctx.sessionManager.getBranch();
+    if (!getLatestCompactionEntry(branch)) return undefined;
+
+    // Pi's projection includes the summary, retained messages, and system/tool
+    // checkpoint, while honoring persisted edits. Ignore old usage counters.
+    const { messages } = ctx.sessionManager.buildSessionProjection();
+    const tokens = messages.reduce(
+      (total, message) => total + estimateTokens(message),
+      0,
+    );
+    const percent = (tokens / contextWindow) * 100;
+    return Number.isFinite(percent) ? percent : undefined;
+  } catch {
+    // Malformed history or an SDK estimation failure must not break the footer.
+    return undefined;
+  }
+}
+
+/** Format either reported or estimated context with the same color ramp. */
+function formatContext(percent: number, estimated: boolean): {
+  label: string;
+  color: string;
+} {
   const clamped = Math.max(0, Math.min(100, percent));
-  return { label: `${clamped.toFixed(0)}%`, color: contextColor(clamped) };
+  return {
+    label: `${estimated ? "~" : ""}${clamped.toFixed(0)}%`,
+    color: contextColor(clamped),
+  };
 }
 
 // ── Model ────────────────────────────────────────────────────────────

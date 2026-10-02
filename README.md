@@ -56,6 +56,14 @@ A subtle separator sits between the two information rows.
 Token counters and cost accumulate across the active session branch. For Codex
 subscriptions, `$` is an API-equivalent estimate, not a subscription charge.
 
+The context meter refreshes immediately after compaction. While Pi reports usage
+as unknown, it shows an approximate percentage such as `~3%`, estimated from the
+summary, retained messages, and projected system/tool checkpoint. After the next
+model response it switches back to reported usage without the `~` prefix. Failed
+estimates show `?`. The estimate uses Pi's characters-per-token heuristic and
+honors persisted context edits, but omits summary wrapper text and request-time
+extension transformations.
+
 ## Commands
 
 ```text
