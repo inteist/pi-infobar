@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Refresh the cached context meter immediately after manual, automatic, or extension-provided compaction instead of retaining the pre-compaction percentage.
 - Omit null headers returned by Pi's auth API from Codex usage requests.
 
 ### Changed

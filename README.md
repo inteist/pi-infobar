@@ -149,7 +149,7 @@ The main extension entry point — only lifecycle & event wiring:
 
 - `piInfobar()` default export
 - `installFooter()`, `refresh()`
-- Event handlers: `session_start`, `session_tree`, `session_shutdown`, `model_select`, `agent_end`, `turn_end`, `thinking_level_select`
+- Event handlers: `session_start`, `session_tree`, `session_shutdown`, `session_compact`, `model_select`, `agent_end`, `turn_end`, `thinking_level_select`
 - Command handlers: `pi-infobar`, `codex-status`
 
 ---
