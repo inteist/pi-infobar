@@ -6,6 +6,8 @@ High-contrast two-row info bar for the Pi coding agent.
 
 This extension replaces Pi's default footer with a cleaner info bar layout inspired by a Starship-style prompt. It keeps the most important information visually dominant and avoids low-value activity labels like `status`, `idle`, or `ready`.
 
+Requires Pi `1.0.0` or later.
+
 ## Install
 
 ```bash
@@ -43,7 +45,7 @@ A subtle separator sits between the two information rows.
 
 #### Right: context, token usage, finish time, and cost
 
-- last turn finish time as plain local `HH:mm:ss` (or `—` before the first finish);
+- last turn finish date and time as plain local `MMM d  HH:mm`, such as `Oct 2  15:32` (or `—` before the first finish);
 - context percentage with a stepped color ramp from transparent/green through yellow, orange, and red by 60%;
 - plain `↑` uncached input tokens;
 - plain `↓` output tokens;
@@ -53,6 +55,14 @@ A subtle separator sits between the two information rows.
 
 Token counters and cost accumulate across the active session branch. For Codex
 subscriptions, `$` is an API-equivalent estimate, not a subscription charge.
+
+The context meter refreshes immediately after compaction. While Pi reports usage
+as unknown, it shows an approximate percentage such as `~3%`, estimated from the
+summary, retained messages, and projected system/tool checkpoint. After the next
+model response it switches back to reported usage without the `~` prefix. Failed
+estimates show `?`. The estimate uses Pi's characters-per-token heuristic and
+honors persisted context edits, but omits summary wrapper text and request-time
+extension transformations.
 
 ## Commands
 
@@ -147,7 +157,7 @@ The main extension entry point — only lifecycle & event wiring:
 
 - `piInfobar()` default export
 - `installFooter()`, `refresh()`
-- Event handlers: `session_start`, `session_tree`, `session_shutdown`, `model_select`, `agent_end`, `turn_end`, `thinking_level_select`
+- Event handlers: `session_start`, `session_tree`, `session_shutdown`, `session_compact`, `model_select`, `agent_end`, `turn_end`, `thinking_level_select`
 - Command handlers: `pi-infobar`, `codex-status`
 
 ---

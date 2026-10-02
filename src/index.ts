@@ -355,6 +355,13 @@ export default function piInfobar(pi: ExtensionAPI): void {
     refreshCodexUsage(ctx, false, event.model);
   });
 
+  /**
+   * Compaction changes context without necessarily ending another turn.
+   * Refresh cached stats and redraw immediately, showing an estimate of the
+   * rebuilt context until the next response supplies fresh usage.
+   */
+  pi.on("session_compact", (_event, ctx) => refreshStats(ctx));
+
   /** Record the finish only when the whole agent run ends, not after each tool turn. */
   pi.on("agent_end", (_event, ctx) => {
     runtime.lastTurnFinishedAt = Date.now();

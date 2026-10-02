@@ -29,7 +29,8 @@
     "clean": "rm -rf dist",
     "build": "echo 'nothing to build'",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck",
+    "test": "node --test tests/*.test.mjs",
+    "check": "npm run typecheck && npm test",
     "prepack": "npm run clean && npm run build",
     "prepublishOnly": "npm run check",
     "deploy": "npm install && npm run check && npm run build && npm publish --access public"
@@ -48,8 +49,8 @@
     "@earendil-works/pi-tui": "*"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "^0.78.1",
-    "@earendil-works/pi-tui": "^0.78.1",
+    "@earendil-works/pi-coding-agent": "^1.0.0",
+    "@earendil-works/pi-tui": "^1.0.0",
     "@types/node": "^24.0.0",
     "typescript": "^5.9.3"
   }

@@ -121,7 +121,11 @@ async function resolvePiCodexAuth(
 			continue;
 		}
 
-		const headers = { ...(auth.headers ?? {}) };
+		// Pi uses null values to remove headers; never send them as header strings.
+		const headers: Record<string, string> = {};
+		for (const [name, value] of Object.entries(auth.headers ?? {})) {
+			if (typeof value === "string") headers[name] = value;
+		}
 		const bearerToken = bearerTokenFromHeaders(headers) ?? auth.apiKey;
 		if (!hasHeader(headers, "Authorization") && bearerToken) {
 			headers.Authorization = `Bearer ${bearerToken}`;
