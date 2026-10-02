@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Separate cumulative cache-read (`R`) and cache-write (`W`) token counters, shown only when nonzero.
 
+### Fixed
+
+- Omit null headers returned by Pi's auth API from Codex usage requests.
+
 ### Changed
 
 - Show the last turn finish time as `Oct 2  15:32`: the date, a clock icon, and the time without seconds.
