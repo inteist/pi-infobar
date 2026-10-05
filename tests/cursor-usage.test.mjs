@@ -154,6 +154,110 @@ test("timeout covers OAuth refresh as well as reading the response body", async 
   assert.match((await query(context, { timeoutMs: 5 })).error, /timed out/);
 });
 
+test("manager deduplicates requests, caches for five minutes, and clears late results", async () => {
+  let calls = 0;
+  const d = deferred();
+  const manager = new Manager(() => { calls++; return d.promise; });
+  const p = manager.refresh(ctx());
+  assert.equal(manager.state, "loading");
+  assert.equal(manager.refresh(ctx()), p);
+  assert.equal(calls, 1);
+  d.resolve(success());
+  await p;
+  assert.equal(manager.state, "loaded");
+  assert.equal(manager.isCacheFresh(), true);
+  await manager.refresh(ctx());
+  assert.equal(calls, 1);
+  manager.dispose();
+  const late = deferred();
+  const next = new Manager(() => late.promise);
+  const pending = next.refresh(ctx());
+  next.clear();
+  late.resolve(success());
+  await pending;
+  assert.equal(next.getReport(), undefined);
+  assert.equal(next.state, "idle");
+});
+
+test("manager retries at 1m/2m/4m/5m, keeps stale data, and resets on success", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1_000_000 });
+  const outcomes = [success(), ...Array(4).fill({ ok: false, error: "failed" }), success()];
+  let calls = 0;
+  const manager = new Manager(async () => { calls++; return outcomes.shift(); });
+  await manager.refresh(ctx());
+  t.mock.timers.tick(300_000);
+  await manager.refresh(ctx());
+  assert.equal(manager.state, "error");
+  assert.equal(manager.getReport().totalPercentUsed, 9.032);
+  for (const delay of [60_000, 120_000, 240_000, 300_000]) {
+    const before = calls;
+    t.mock.timers.tick(delay - 1);
+    assert.equal(calls, before);
+    t.mock.timers.tick(1);
+    await manager.refresh(ctx());
+    assert.equal(calls, before + 1);
+  }
+  assert.equal(manager.state, "loaded");
+  manager.dispose();
+});
+
+test("forcing a refresh ignores the older response and aborts its signal", async () => {
+  const first = deferred(), second = deferred();
+  let calls = 0, oldSignal;
+  const manager = new Manager((_ctx, options) => {
+    if (++calls === 1) { oldSignal = options.signal; return first.promise; }
+    return second.promise;
+  });
+  const p1 = manager.refresh(ctx());
+  const p2 = manager.refresh(ctx(), true);
+  assert.equal(oldSignal.aborted, true);
+  second.resolve(success());
+  await p2;
+  first.resolve({ ok: true, report: normalize({ planUsage: { totalPercentUsed: 99 } }) });
+  await p1;
+  assert.equal(manager.getReport().totalPercentUsed, 9.032);
+  manager.dispose();
+});
+
+test("missing login on another provider stays quiet without retry timers", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let calls = 0;
+  const manager = new Manager(async () => { calls++; return { ok: false, unavailable: true, error: "login" }; });
+  await manager.refresh(ctx("anthropic"));
+  assert.equal(manager.state, "idle");
+  t.mock.timers.tick(600_000);
+  assert.equal(calls, 1);
+  manager.dispose();
+});
+
+for (const retained of [false, true]) {
+  test(`non-forced event refreshes honor backoff ${retained ? "with" : "without"} retained data`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1_790_000_000_000 });
+    let calls = 0;
+    const manager = new Manager(async () => { calls++; return { ok: false, error: "offline" }; });
+    t.after(() => manager.dispose());
+    if (retained) {
+      manager.setReport(normalize(payload));
+      t.mock.timers.tick(300_000);
+    }
+    await manager.refresh(ctx());
+    for (let i = 0; i < 5; i++) await manager.refresh(ctx());
+    assert.equal(calls, 1);
+    t.mock.timers.tick(59_999);
+    await manager.refresh(ctx());
+    assert.equal(calls, 1);
+    t.mock.timers.tick(1);
+    await manager.refresh(ctx());
+    assert.equal(calls, 2);
+    // The explicit bypass is still allowed during the second retry interval.
+    await manager.refresh(ctx(), true);
+    assert.equal(calls, 3);
+    manager.clear();
+    await manager.refresh(ctx());
+    assert.equal(calls, 4);
+  });
+}
+
 test("optional percentages and absent spend data remain unavailable; omitted scalar spend means zero", () => {
   const omitted = normalize({ planUsage: {}, spendLimitUsage: {} });
   assert.equal(omitted.autoPercentUsed, undefined);
