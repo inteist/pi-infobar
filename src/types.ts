@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 import type { CodexUsageManager } from "./codex-usage/index.js";
+import type { CursorUsageManager } from "./cursor-usage/index.js";
 
 // ── Thinking ─────────────────────────────────────────────────────────
 
@@ -16,6 +17,7 @@ export interface RuntimeState {
   tokenTotals: TokenTotals;
   lastTurnFinishedAt?: number;
   codexUsage: CodexUsageManager;
+  cursorUsage: CursorUsageManager;
 }
 
 // ── Tokens / Cost ────────────────────────────────────────────────────

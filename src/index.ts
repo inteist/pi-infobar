@@ -14,6 +14,11 @@ import {
   showCodexReport,
 } from "./codex-usage/index.js";
 import {
+  CursorUsageManager,
+  formatCursorUsageReport,
+  queryCursorUsage,
+} from "./cursor-usage/index.js";
+import {
   contextSnapshot,
   getLastTurnFinishedAt,
   getTokenTotals,
@@ -52,6 +57,7 @@ const CODEX_COMMAND_NAME = "codex-status";
 export default function piInfobar(pi: ExtensionAPI): void {
   let enabled = process.env.PI_INFOBAR !== "0";
   const codexUsage = new CodexUsageManager();
+  const cursorUsage = new CursorUsageManager();
 
   /**
    * Mutable state shared between the event handlers and the render closures.
@@ -64,6 +70,7 @@ export default function piInfobar(pi: ExtensionAPI): void {
     context: { label: "?", color: "" },
     tokenTotals: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 },
     codexUsage,
+    cursorUsage,
   };
 
   // ── Internal Helpers ──────────────────────────────────────────────
@@ -91,16 +98,14 @@ export default function piInfobar(pi: ExtensionAPI): void {
   };
 
   /**
-   * Kick off a background Codex usage refresh if the infobar is enabled.
-   *
-   * `force` bypasses the cache TTL check (used when the user explicitly runs
-   * `/codex-status --refresh`).
+   * Kick off background subscription usage refreshes if the infobar is enabled.
+   * `force` bypasses the cache TTL check.
    *
    * `model` defaults to the context's active model but can be overridden when
    * the refresh is triggered by a `model_select` event (the event carries the
    * newly selected model before the context has been fully updated).
    */
-  const refreshCodexUsage = (
+  const refreshSubscriptionUsage = (
     ctx: ExtensionContext,
     force = false,
     model = ctx.model,
@@ -109,6 +114,7 @@ export default function piInfobar(pi: ExtensionAPI): void {
     void codexUsage.refresh(ctx, force, model, {
       showErrors: isOpenAICodexModel(model),
     });
+    void cursorUsage.refresh(ctx, force, model);
   };
 
   // ── Footer Installation ───────────────────────────────────────────
@@ -141,7 +147,9 @@ export default function piInfobar(pi: ExtensionAPI): void {
       ctx.ui.setFooter(undefined);
       runtime.requestRender = undefined;
       codexUsage.setRenderCallback(undefined);
+      cursorUsage.setRenderCallback(undefined);
       codexUsage.clear();
+      cursorUsage.clear();
       return;
     }
 
@@ -155,6 +163,7 @@ export default function piInfobar(pi: ExtensionAPI): void {
       // Wire up async render triggers.
       runtime.requestRender = () => tui.requestRender();
       codexUsage.setRenderCallback(refresh);
+      cursorUsage.setRenderCallback(refresh);
 
       // Redraw whenever the git branch changes (e.g. after `git checkout`).
       const unsubscribeBranch = footerData.onBranchChange(refresh);
@@ -168,6 +177,7 @@ export default function piInfobar(pi: ExtensionAPI): void {
           unsubscribeBranch();
           clearInterval(clock);
           codexUsage.setRenderCallback(undefined);
+          cursorUsage.setRenderCallback(undefined);
         },
 
         /**
@@ -187,7 +197,7 @@ export default function piInfobar(pi: ExtensionAPI): void {
          *   1. Separator (thin rule)
          *   2. Primary line  – path + branch + provider/model + thinking chips
          *   3. Spacer        – blank separator for visual breathing room
-         *   4. Usage line    – Codex usage chip + context + tokens + finish time + cost
+         *   4. Usage line    – subscription chips + context + tokens + finish time + cost
          *
          * Memoised: if both `width` and `runtime.renderVersion` are unchanged
          * from the previous call, the cached string array is returned directly.
@@ -221,7 +231,7 @@ export default function piInfobar(pi: ExtensionAPI): void {
    * `/pi-infobar [on|off|toggle]`
    *
    * Toggle the high-contrast Pi info bar.  When enabling, immediately syncs
-   * stats and triggers a Codex usage fetch so the footer is populated right
+   * stats and triggers subscription usage fetches so the footer is populated right
    * away rather than showing a stale or empty state.
    */
   pi.registerCommand("pi-infobar", {
@@ -235,8 +245,11 @@ export default function piInfobar(pi: ExtensionAPI): void {
 
       if (enabled) updateFooterStats(ctx);
       installFooter(ctx);
-      if (enabled) refreshCodexUsage(ctx);
-      else codexUsage.clear();
+      if (enabled) refreshSubscriptionUsage(ctx);
+      else {
+        codexUsage.clear();
+        cursorUsage.clear();
+      }
       ctx.ui.notify(
         `High-contrast info bar ${enabled ? "enabled" : "disabled"}`,
         "info",
@@ -307,7 +320,7 @@ export default function piInfobar(pi: ExtensionAPI): void {
    * `session_start` – a new Pi session has been created.
    * Snapshot the initial thinking level (it won't fire a separate event),
    * populate the footer stats, install the footer, and kick off an
-   * initial Codex usage fetch.
+   * initial subscription usage fetches.
    */
   pi.on("session_start", (_event, ctx) => {
     runtime.thinkingLevel = pi.getThinkingLevel();
@@ -315,26 +328,26 @@ export default function piInfobar(pi: ExtensionAPI): void {
     updateFooterStats(ctx);
     installFooter(ctx);
     refresh();
-    refreshCodexUsage(ctx);
+    refreshSubscriptionUsage(ctx);
   });
 
   /**
    * `session_tree` – the session's conversation tree has been mutated
    * (e.g. a new turn was committed or the tree was pruned).
    * Re-install the footer in case the context mode changed, then refresh
-   * stats and Codex usage.
+   * stats and subscription usage.
    */
   pi.on("session_tree", (_event, ctx) => {
     runtime.lastTurnFinishedAt = getLastTurnFinishedAt(ctx);
     installFooter(ctx);
     refreshStats(ctx);
-    refreshCodexUsage(ctx);
+    refreshSubscriptionUsage(ctx);
   });
 
   /**
    * `session_shutdown` – the Pi session is closing.
    * Remove the footer and status entry, detach the render callback, and
-   * dispose the Codex usage manager to cancel any pending timers.
+   * dispose the usage managers to cancel pending queries and timers.
    */
   pi.on("session_shutdown", (_event, ctx) => {
     if (ctx.mode === "tui") ctx.ui.setFooter(undefined);
@@ -342,17 +355,18 @@ export default function piInfobar(pi: ExtensionAPI): void {
     runtime.requestRender = undefined;
     codexUsage.clear();
     codexUsage.dispose();
+    cursorUsage.dispose();
   });
 
   /**
    * `model_select` – the user switched to a different model.
-   * Refresh stats immediately and trigger a Codex usage refresh using the
+   * Refresh stats immediately and trigger subscription usage refreshes using the
    * newly selected model (passed via the event) so the chip updates before
    * the next timer tick.
    */
   pi.on("model_select", (event, ctx) => {
     refreshStats(ctx);
-    refreshCodexUsage(ctx, false, event.model);
+    refreshSubscriptionUsage(ctx, false, event.model);
   });
 
   /**

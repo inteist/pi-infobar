@@ -230,6 +230,56 @@ test("missing login on another provider stays quiet without retry timers", async
   manager.dispose();
 });
 
+function runtime(cursorUsage, codexUsage = new CodexManager()) {
+  return { cursorUsage, codexUsage, tokenTotals: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 },
+    context: { label: "0%", color: "#ffffff" } };
+}
+
+test("footer matches OpenAI percentage and reset countdown, clamps exhaustion, and fits narrow widths", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: Number(payload.billingCycleEnd) - 5 * 24 * 60 * 60_000 });
+  const cursor = new Manager();
+  cursor.setReport(normalize(payload));
+  const state = runtime(cursor);
+  const line = stripAnsi(renderUsageLine(160, ctx(), {}, state));
+  assert.match(line, /Cursor.*91% 5d/);
+  assert.doesNotMatch(line, /OpenAI|left|resets/);
+  for (const width of [0, 1, 10, 25, 60, 80]) {
+    assert.ok(stripAnsi(renderUsageLine(width, ctx(), {}, state)).length <= width);
+  }
+  cursor.setReport(normalize({ planUsage: { totalPercentUsed: 150 } }));
+  assert.match(stripAnsi(renderUsageLine(160, ctx(), {}, state)), /0%/);
+  cursor.dispose();
+  state.codexUsage.dispose();
+});
+
+test("Cursor countdown switches to hours, minutes, and now like OpenAI", (t) => {
+  const now = 1_790_000_000_000;
+  t.mock.timers.enable({ apis: ["Date"], now });
+  const cursor = new Manager();
+  const state = runtime(cursor);
+  for (const [offset, label] of [[25 * 60 * 60_000, "2d"], [2 * 60 * 60_000, "2h"], [37 * 60_000, "37m"], [0, "now"]]) {
+    cursor.setReport(normalize({ ...payload, billingCycleEnd: now + offset }));
+    assert.ok(stripAnsi(renderUsageLine(160, ctx(), {}, state)).includes(`91% ${label}`));
+  }
+  cursor.dispose(); state.codexUsage.dispose();
+});
+
+test("both subscription chips render, active provider first, and errors mark cached Cursor data stale", async () => {
+  const cursor = new Manager(async () => ({ ok: false, error: "offline" }));
+  cursor.setReport(normalize(payload));
+  const codex = new CodexManager();
+  codex.setReport({ capturedAt: Date.now(), source: "pi-auth", snapshots: [{ limitId: "codex", limitName: "Codex",
+    primary: { usedPercent: 12, windowMinutes: 300 }, secondary: { usedPercent: 22, windowMinutes: 10080 } }] });
+  const state = runtime(cursor, codex);
+  const cursorLine = stripAnsi(renderUsageLine(240, ctx(), {}, state));
+  assert.ok(cursorLine.indexOf("Cursor") < cursorLine.indexOf("OpenAI"));
+  const codexLine = stripAnsi(renderUsageLine(240, ctx("openai-codex"), {}, state));
+  assert.ok(codexLine.indexOf("OpenAI") < codexLine.indexOf("Cursor"));
+  await cursor.refresh(ctx(), true);
+  assert.match(stripAnsi(renderUsageLine(240, ctx(), {}, state)), /Cursor.*stale/);
+  cursor.dispose(); codex.dispose();
+});
+
 for (const retained of [false, true]) {
   test(`non-forced event refreshes honor backoff ${retained ? "with" : "without"} retained data`, async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1_790_000_000_000 });
