@@ -9,10 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Cursor subscription usage tracking using the existing Pi OAuth login: included percentage remaining and reset countdown matching OpenAI's footer format, and `/cursor-status` reports with Auto/API percentages and personal on-demand spend.
+- Independent five-minute Cursor usage cache with bounded retry backoff, stale-report indicators, and active-provider priority when both subscription chips are shown.
 - Separate cumulative cache-read (`R`) and cache-write (`W`) token counters, shown only when nonzero.
 
 ### Fixed
 
+- Guard Cursor status commands against clear/shutdown and out-of-order responses, mark retained reports stale on explicit refresh failures, and honor retry deadlines for event-driven refreshes.
+- Respect each Cursor status command's timeout while joining shared work without cancelling that work, and rearm polling when a backward clock adjustment leaves cache/retry deadlines ahead of elapsed timers.
+- Distinguish unavailable Cursor Auto/API percentages and missing/malformed spend data from confirmed zero usage, preserving protobuf scalar zero defaults.
 - Refresh the cached context meter immediately after manual, automatic, or extension-provided compaction instead of retaining the pre-compaction percentage.
 - Omit null headers returned by Pi's auth API from Codex usage requests.
 

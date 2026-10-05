@@ -41,7 +41,12 @@ A subtle separator sits between the two information rows.
 
 ### Line 2
 
-#### Left: Codex subscription usage
+#### Left: Codex and Cursor subscription usage
+
+Cursor shows included usage remaining and time until the billing cycle resets,
+matching OpenAI's format: `Cursor 91% 5d`. The countdown switches to hours or minutes
+as reset approaches. Both subscriptions can appear; the active provider
+comes first and takes priority on narrow terminals.
 
 #### Right: context, token usage, finish time, and cost
 
@@ -54,7 +59,7 @@ A subtle separator sits between the two information rows.
 - dark-green `$` estimated cost, including cache reads and writes.
 
 Token counters and cost accumulate across the active session branch. For Codex
-subscriptions, `$` is an API-equivalent estimate, not a subscription charge.
+and Cursor subscriptions, `$` is an API-equivalent estimate, not a subscription charge.
 
 The context meter refreshes immediately after compaction. While Pi reports usage
 as unknown, it shows an approximate percentage such as `~3%`, estimated from the
@@ -75,7 +80,39 @@ extension transformations.
 /codex-status --refresh  refresh Codex usage
 /codex-status --no-statusline  show report without updating footer
 /codex-status --clear-statusline  clear Codex usage from footer
+/cursor-status         show included, Auto/API usage, and personal on-demand spend
+/cursor-status --refresh  refresh Cursor usage
+/cursor-status --no-statusline  show report without updating footer
+/cursor-status --clear-statusline  clear Cursor usage from footer
 ```
+
+Both status commands accept `--timeout seconds` (1–120, default 15).
+For `/cursor-status`, this also bounds waiting on an existing query. A waiting timeout
+neither cancels the shared request nor changes its footer cache.
+
+### Cursor authentication and refresh
+
+Uses your existing Pi Cursor OAuth login (`/login` for Cursor). Expired credentials
+are refreshed through Pi's registered Cursor provider (such as `pi-cursor`); no
+Cursor desktop database or CLI credentials are read. The meter follows Cursor CLI's
+authoritative included-usage percentage, falling back to included spend / limit
+only when that percentage is missing. Personal on-demand spend is reported separately
+by `/cursor-status`, never inferred from a team's pooled usage. Plans without usage
+percentages show `usage unavailable` rather than a fabricated remaining balance.
+Missing Auto/API percentages and malformed values are reported as `unavailable`,
+not zero. Cursor's protobuf makes personal spend a non-optional scalar: omitting it
+within a present spend-usage object means $0; a missing object means unavailable.
+
+Usage is cached for five minutes and refreshed in the background. Failed refreshes
+retry after 1/2/4/5 minutes; model-selection and session-tree events honor that deadline.
+`--refresh` can bypass it. Failed usage queries, whether started by a command or in
+the background, mark retained Cursor reports `stale`; commands identify cached/stale output.
+Polling is rearmed if a clock rollback leaves a cache/retry deadline in the future.
+Footer-updating commands share cancellation and generation guards with background
+requests, so clearing, disabling,
+or shutdown discards pending results. `--no-statusline` never mutates footer state.
+Accounts without a Pi Cursor login don't add a chip when another provider is active.
+The endpoint is an unofficial Cursor dashboard API and may change.
 
 You can start Pi with the info bar disabled:
 
@@ -100,6 +137,7 @@ pi-infobar/
 │   ├── format.ts         ← Pure data formatters: formatCount, formatCost, shortenModel, etc. (~80 lines)
 │   ├── git.ts            ← Git snapshot, cache, parsing, status formatting (~175 lines)
 │   ├── codex-usage/      ← Codex subscription usage queries, reports, cache, and statusline manager
+│   ├── cursor-usage/     ← Cursor OAuth usage query, report formatting, and independent cache
 │   └── renderers.ts      ← Footer line renderers: renderPrimaryLine, renderUsageLine, etc. (~140 lines)
 ├── index.ts              ← Re-export barrel: `export { default } from "./src/index.js"` (~1 line)
 ├── package.json          ← Updated "files" list & tsconfig include
@@ -158,6 +196,6 @@ The main extension entry point — only lifecycle & event wiring:
 - `piInfobar()` default export
 - `installFooter()`, `refresh()`
 - Event handlers: `session_start`, `session_tree`, `session_shutdown`, `session_compact`, `model_select`, `agent_end`, `turn_end`, `thinking_level_select`
-- Command handlers: `pi-infobar`, `codex-status`
+- Command handlers: `pi-infobar`, `codex-status`, `cursor-status`
 
 ---
