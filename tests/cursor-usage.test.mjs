@@ -277,6 +277,17 @@ function runtime(cursorUsage, codexUsage = new CodexManager()) {
     context: { label: "0%", color: "#ffffff" } };
 }
 
+test("footer highlights the last-turn finish timestamp in orange, keeping tokens muted", () => {
+  const cursor = new Manager();
+  const state = runtime(cursor);
+  state.lastTurnFinishedAt = new Date(2026, 0, 2, 15, 32).getTime();
+  const line = renderUsageLine(240, ctx(), {}, state);
+  assert.ok(line.includes("\x1b[38;2;249;115;22mJan 2  15:32"));
+  assert.ok(line.includes("\x1b[38;2;100;116;139m"));
+  cursor.dispose();
+  state.codexUsage.dispose();
+});
+
 test("footer matches OpenAI percentage and reset countdown, clamps exhaustion, and fits narrow widths", async (t) => {
   t.mock.timers.enable({ apis: ["Date"], now: Number(payload.billingCycleEnd) - 5 * 24 * 60 * 60_000 });
   const cursor = new Manager();
