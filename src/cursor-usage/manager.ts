@@ -54,7 +54,28 @@ export class CursorUsageManager {
     ctx: ExtensionContext,
     options: { refresh: boolean; timeoutMs: number },
   ): Promise<CursorUsageOutcome | undefined> {
+    if (this.pending && !options.refresh) return this.waitForPending(this.pending, options.timeoutMs);
     return this.request(ctx, options.refresh, ctx.model, options.timeoutMs);
+  }
+
+  /** A command's waiting deadline must not cancel or fail the shared query. */
+  private async waitForPending(
+    pending: Promise<CursorUsageOutcome | undefined>,
+    timeoutMs: number,
+  ): Promise<CursorUsageOutcome | undefined> {
+    const generation = this.generation;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const outcome = await Promise.race([
+        pending,
+        new Promise<CursorUsageOutcome>((resolve) => {
+          timer = setTimeout(() => resolve({ result: { ok: false, error: "Cursor usage query timed out." } }), timeoutMs);
+        }),
+      ]);
+      return generation === this.generation ? outcome : undefined;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   private request(

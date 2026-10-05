@@ -530,6 +530,93 @@ test("managed command timeout is respected and a disposed manager cannot restart
   assert.equal(harness.manager.state, "idle");
 });
 
+test("joining a background query honors each command's timeout without cancelling shared work", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1_790_000_000_000 });
+  const harness = createCommandHarness(t);
+  const started = deferred();
+  let signal;
+  const fetch = t.mock.method(globalThis, "fetch", async (_url, options) => {
+    signal = options.signal;
+    started.resolve();
+    return new Promise((_resolve, reject) => {
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    });
+  });
+  const background = harness.manager.refresh(harness.context);
+  await started.promise;
+  let shortDone = false, longDone = false;
+  const short = harness.command("--timeout 1").then(() => { shortDone = true; });
+  const long = harness.command("--timeout 20").then(() => { longDone = true; });
+  t.mock.timers.tick(999);
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  assert.equal(shortDone, false);
+  t.mock.timers.tick(1);
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  assert.equal(shortDone, true);
+  await short;
+  assert.match(harness.notifications.at(-1).message, /timed out/);
+  assert.equal(longDone, false);
+  assert.equal(signal.aborted, false);
+  assert.equal(harness.manager.state, "loading");
+  assert.equal(fetch.mock.callCount(), 1);
+  // The longer waiter receives the background query's own 15-second timeout.
+  t.mock.timers.tick(14_000);
+  await background;
+  await long;
+  assert.equal(signal.aborted, true);
+  assert.equal(harness.manager.state, "error");
+  assert.equal(fetch.mock.callCount(), 1);
+});
+
+test("one shared waiter timing out does not prevent other waiters or the cache from receiving success", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1_790_000_000_000 });
+  const response = deferred();
+  let signal, calls = 0;
+  const manager = new Manager((_ctx, options) => { calls++; signal = options.signal; return response.promise; });
+  t.after(() => manager.dispose());
+  manager.setReport(normalize(payload));
+  const cached = manager.getReport();
+  const background = manager.refresh(ctx(), true);
+  let shortDone = false;
+  const short = manager.queryStatus(ctx(), { refresh: false, timeoutMs: 1000 }).then((outcome) => {
+    shortDone = true;
+    return outcome;
+  });
+  const long = manager.queryStatus(ctx(), { refresh: false, timeoutMs: 3000 });
+  t.mock.timers.tick(1000);
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  assert.equal(shortDone, true);
+  assert.match((await short).result.error, /timed out/);
+  assert.equal(manager.getReport(), cached);
+  assert.equal(manager.state, "loaded");
+  assert.equal(manager.isCacheFresh(), true);
+  assert.equal(signal.aborted, false);
+  t.mock.timers.tick(1000);
+  response.resolve({ ok: true, report: normalize({ ...payload, planUsage: { totalPercentUsed: 20 } }) });
+  await background;
+  assert.equal((await long).result.report.totalPercentUsed, 20);
+  assert.equal(manager.getReport().totalPercentUsed, 20);
+  assert.equal(calls, 1);
+});
+
+for (const invalidation of ["clear", "dispose"]) {
+  test(`a shared wait's timeout stays silent after ${invalidation}`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1_790_000_000_000 });
+    const response = deferred();
+    const manager = new Manager(() => response.promise); // Ignore abort to exercise the waiter's generation guard.
+    t.after(() => manager.dispose());
+    const background = manager.refresh(ctx());
+    const joined = manager.queryStatus(ctx(), { refresh: false, timeoutMs: 1000 });
+    manager[invalidation]();
+    t.mock.timers.tick(1000);
+    assert.equal(await joined, undefined);
+    response.resolve(success());
+    await background;
+    assert.equal(manager.getReport(), undefined);
+    assert.equal(manager.state, "idle");
+  });
+}
+
 test("optional percentages and absent spend data remain unavailable; omitted scalar spend means zero", () => {
   const omitted = normalize({ planUsage: {}, spendLimitUsage: {} });
   assert.equal(omitted.autoPercentUsed, undefined);
