@@ -7,11 +7,13 @@ import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { ansi, readableTextOn } from "./ansi.js";
 import { chip, plain, renderChip, renderChips, renderSegmentedChip } from "./chips.js";
 import { isOpenAICodexModel } from "./codex-usage/index.js";
+import { cursorRemaining, isCursorModel } from "./cursor-usage/index.js";
 import {
   formatCodexChipData,
   formatCost,
   formatCount,
   formatFinishTime,
+  formatResetCountdown,
   formatThinking,
   formatWorkingPath,
   modelName,
@@ -19,7 +21,7 @@ import {
   smartPathTruncate,
 } from "./format.js";
 import { getGitSnapshot } from "./git.js";
-import { COLOR, thinkingColor } from "./theme.js";
+import { COLOR, codexPercentColor, thinkingColor } from "./theme.js";
 import type { Chip, GitStatusPart, RuntimeState } from "./types.js";
 
 // ── Line Renderers ────────────────────────────────────────────────────────────────────────────────────────────────
@@ -67,7 +69,7 @@ export function renderPrimaryLine(
 /**
  * Render the **usage** footer line (line 4 of 4).
  *
- * Left side:  Codex usage chip (OpenAI rate-limit / credits).
+ * Left side:  subscription usage chips (active provider first).
  * Right side: finish time | CTX | ↑ uncached input | ↓ output | R cache read |
  * W cache write | $ cost. Cache counters are shown only when nonzero.
  * Time and tokens are plain text; context and cost keep their chip styling.
@@ -101,7 +103,7 @@ export function renderUsageLine(
   ];
 
   return fitLeftRight(width, right, (available) =>
-    renderCodexStatus(available, runtime, ctx),
+    renderSubscriptionStatus(available, runtime, ctx),
   );
 }
 
@@ -325,6 +327,55 @@ function renderWorktreeChip(worktreeName: string, maxWidth: number): string {
  * (with individual coloured segments), then falling back to a plain chip with
  * the concatenated text truncated to the available space.
  */
+function renderSubscriptionStatus(maxWidth: number, runtime: RuntimeState, ctx: ExtensionContext): string {
+  const cursorActive = isCursorModel(ctx.model);
+  const cursor = renderCursorStatus(maxWidth, runtime, ctx);
+  // Avoid an empty OpenAI placeholder taking space from the active Cursor meter.
+  const codex = cursorActive && !runtime.codexUsage.getReport()
+    ? "" : renderCodexStatus(maxWidth, runtime, ctx);
+  if (!cursor) return codex;
+  if (!codex) return cursor;
+  if (visibleWidth(cursor) + visibleWidth(codex) + 1 <= maxWidth) {
+    return cursorActive ? `${cursor} ${codex}` : `${codex} ${cursor}`;
+  }
+  // Prefer the active subscription on narrow terminals; show both when practical.
+  const first = cursorActive ? renderCursorStatus : renderCodexStatus;
+  const second = cursorActive ? renderCodexStatus : renderCursorStatus;
+  if (maxWidth < 60) return first(maxWidth, runtime, ctx);
+  const budget = Math.floor((maxWidth - 1) / 2);
+  const left = first(budget, runtime, ctx);
+  return `${left} ${second(maxWidth - visibleWidth(left) - 1, runtime, ctx)}`;
+}
+
+function renderCursorStatus(maxWidth: number, runtime: RuntimeState, ctx: ExtensionContext): string {
+  if (maxWidth <= 0) return "";
+  const manager = runtime.cursorUsage;
+  const report = manager.getReport();
+  const active = isCursorModel(ctx.model);
+  if (!report && (!active || manager.state === "idle")) return "";
+  const remaining = report?.totalPercentUsed === undefined ? undefined : cursorRemaining(report.totalPercentUsed);
+  const text = report ? remaining === undefined ? "usage unavailable" : `${remaining.toFixed(0)}%`
+    : manager.state === "loading" ? "checking…" : "unavailable";
+  const stale = report && manager.state === "error" ? " · stale" : "";
+  const reset = report?.billingCycleEnd ? formatResetCountdown({
+    usedPercent: report.totalPercentUsed ?? 0,
+    resetsAt: report.billingCycleEnd / 1000,
+    windowMinutes: 30 * 24 * 60,
+  }, "mo") : "";
+  const accent = !active ? COLOR.openAiInactive : manager.state === "error" ? COLOR.contextFull : COLOR.model;
+  const options = { labelFg: readableTextOn(accent), valueBg: COLOR.panelLift };
+  const full = renderSegmentedChip("Cursor", [
+    { text, fg: remaining === undefined ? COLOR.soft : codexPercentColor(remaining), bold: true },
+    { text: `${reset}${stale}`.trimStart(), fg: stale ? COLOR.contextFull : COLOR.soft },
+  ], accent, options);
+  if (visibleWidth(full) <= maxWidth) return full;
+  const compact = renderChip(chip("Cursor", `${text}${reset ? ` ${reset}` : ""}${stale}`, accent, 1, {
+    ...options,
+    valueFg: remaining === undefined ? COLOR.soft : codexPercentColor(remaining),
+  }));
+  return truncateToWidth(compact, maxWidth, "");
+}
+
 function renderCodexStatus(
   maxWidth: number,
   runtime: RuntimeState,

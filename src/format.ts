@@ -454,7 +454,7 @@ function formatRemainingPercent(
  * The `isLongWindow` flag (derived from `windowMinutes` or the fallback hint)
  * controls whether hours beyond the first day are shown as hours or days.
  */
-function formatResetCountdown(
+export function formatResetCountdown(
   window: import("./codex-usage/types.js").NormalizedRateLimitWindow,
   fallback: string,
 ): string {

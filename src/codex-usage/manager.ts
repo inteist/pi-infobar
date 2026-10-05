@@ -320,6 +320,7 @@ export class CodexUsageManager {
  */
 export function parseCodexStatusArgs(
 	args: string,
+	commandName = "/codex-status",
 ): { ok: true; value: CodexStatusOptions } | { ok: false; error: string } {
 	const tokens = args.trim().split(/\s+/).filter(Boolean);
 	let clearStatusline = false;
@@ -346,7 +347,7 @@ export function parseCodexStatusArgs(
 			if (!rawValue)
 				return {
 					ok: false,
-					error: "Usage: /codex-status [--refresh] [--timeout seconds]",
+					error: `Usage: ${commandName} [--refresh] [--timeout seconds]`,
 				};
 			const parsed = Number(rawValue);
 			if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 120) {
@@ -361,7 +362,7 @@ export function parseCodexStatusArgs(
 		}
 		return {
 			ok: false,
-			error: `Unknown option: ${token}. Usage: /codex-status [--refresh] [--no-statusline] [--clear-statusline] [--timeout seconds]`,
+			error: `Unknown option: ${token}. Usage: ${commandName} [--refresh] [--no-statusline] [--clear-statusline] [--timeout seconds]`,
 		};
 	}
 

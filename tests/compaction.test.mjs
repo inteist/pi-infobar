@@ -10,6 +10,7 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 let buildDir;
 let piInfobar;
 let CodexUsageManager;
+let CursorUsageManager;
 let stripAnsi;
 let contextSnapshot;
 let testSdk;
@@ -51,6 +52,7 @@ before(async () => {
   const load = (path) => import(pathToFileURL(join(buildDir, path)).href);
   ({ default: piInfobar } = await load("src/index.js"));
   ({ CodexUsageManager } = await load("src/codex-usage/manager.js"));
+  ({ CursorUsageManager } = await load("src/cursor-usage/manager.js"));
   ({ queryUsage } = await load("src/codex-usage/query.js"));
   ({ stripAnsi } = await load("src/ansi.js"));
   ({ contextSnapshot } = await load("src/format.js"));
@@ -63,6 +65,7 @@ after(() => {
 
 function createHarness(t) {
   t.mock.method(CodexUsageManager.prototype, "refresh", async () => {});
+  t.mock.method(CursorUsageManager.prototype, "refresh", async () => {});
   const oldEnabled = process.env.PI_INFOBAR;
   process.env.PI_INFOBAR = "1";
   t.after(() => {
