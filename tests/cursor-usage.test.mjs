@@ -617,6 +617,60 @@ for (const invalidation of ["clear", "dispose"]) {
   });
 }
 
+test("a clock rollback at cache expiry rearms the timer and polling continues", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let now = 1_790_000_000_000, calls = 0;
+  t.mock.method(Date, "now", () => now);
+  const manager = new Manager(async () => { calls++; return success(); });
+  t.after(() => manager.dispose());
+  await manager.refresh(ctx());
+  now += 300_000 - 120_000; // Five elapsed minutes, with the wall clock rolled back two minutes.
+  t.mock.timers.tick(300_000);
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  assert.equal(calls, 1);
+  assert.equal(manager.isCacheFresh(), true);
+  now += 119_999;
+  t.mock.timers.tick(119_999);
+  assert.equal(calls, 1);
+  now++;
+  t.mock.timers.tick(1);
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  assert.equal(calls, 2); // No manual refresh: the rearmed timer must perform the query.
+  now += 300_000;
+  t.mock.timers.tick(300_000);
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  assert.equal(calls, 3);
+});
+
+for (const retained of [false, true]) {
+  test(`a clock rollback during backoff rearms retries ${retained ? "with" : "without"} retained data`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    let now = 1_790_000_000_000, calls = 0;
+    t.mock.method(Date, "now", () => now);
+    const manager = new Manager(async () => ++calls === 1 ? { ok: false, error: "offline" } : success());
+    t.after(() => manager.dispose());
+    if (retained) manager.setReport(normalize(payload));
+    await manager.refresh(ctx(), true);
+    now += 60_000 - 120_000; // The elapsed retry timer fires before its adjusted wall-clock deadline.
+    t.mock.timers.tick(60_000);
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    assert.equal(calls, 1);
+    assert.equal(manager.state, "error");
+    now += 119_999;
+    t.mock.timers.tick(119_999);
+    assert.equal(calls, 1);
+    now++;
+    t.mock.timers.tick(1);
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    assert.equal(calls, 2);
+    assert.equal(manager.state, "loaded");
+    now += 300_000;
+    t.mock.timers.tick(300_000);
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    assert.equal(calls, 3);
+  });
+}
+
 test("optional percentages and absent spend data remain unavailable; omitted scalar spend means zero", () => {
   const omitted = normalize({ planUsage: {}, spendLimitUsage: {} });
   assert.equal(omitted.autoPercentUsed, undefined);

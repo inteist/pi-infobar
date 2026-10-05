@@ -87,8 +87,13 @@ export class CursorUsageManager {
     if (this.disposed) return Promise.resolve(undefined);
     if (this.pending && !force) return this.pending;
     const fresh = this.isCacheFresh();
-    const backingOff = Date.now() < this.retryAt;
+    const now = Date.now();
+    const backingOff = now < this.retryAt;
     if (!force && (fresh || backingOff)) {
+      // Wall-clock rollback can make an elapsed timer fire before its deadline.
+      // Keep polling alive without querying early or extending that deadline.
+      if (backingOff) this.schedule(ctx, this.retryAt - now);
+      else if (this.cache) this.schedule(ctx, Math.max(0, CACHE_TTL_MS - (now - this.cache.createdAt)));
       if (this.cache) {
         return Promise.resolve({ result: { ok: true, report: this.cache.report }, cached: true, stale: !fresh });
       }
@@ -181,7 +186,10 @@ export class CursorUsageManager {
 
   private schedule(ctx: ExtensionContext, delay: number): void {
     if (this.timer) clearTimeout(this.timer);
-    this.timer = setTimeout(() => { void this.refresh(ctx); }, delay);
+    this.timer = setTimeout(() => {
+      this.timer = undefined;
+      void this.refresh(ctx);
+    }, delay);
     this.timer.unref?.();
   }
 }
