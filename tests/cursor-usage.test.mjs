@@ -56,6 +56,48 @@ const deferred = () => {
   return { promise, resolve };
 };
 
+function createCommandHarness(t) {
+  const commands = new Map(), handlers = new Map(), notifications = [];
+  t.mock.method(CodexManager.prototype, "refresh", async () => {});
+  // Skip only the initial background request; subsequent requests use the real manager.
+  const startupRefresh = t.mock.method(Manager.prototype, "refresh", async () => {});
+  let manager, footer;
+  const setter = Manager.prototype.setRenderCallback;
+  t.mock.method(Manager.prototype, "setRenderCallback", function (...args) {
+    manager = this;
+    return setter.apply(this, args);
+  });
+  extension({
+    registerCommand: (name, command) => commands.set(name, command),
+    on: (name, handler) => handlers.set(name, handler),
+    getThinkingLevel: () => "off",
+    exec: async () => ({ code: 1, stdout: "" }),
+  });
+  const context = ctx();
+  context.mode = "tui";
+  context.cwd = dirname(root);
+  context.getContextUsage = () => undefined;
+  context.sessionManager = { getBranch: () => [], getSessionId: () => "cursor-test" };
+  context.ui = {
+    setStatus: () => {},
+    setFooter: (factory) => {
+      footer?.dispose();
+      footer = factory?.({ requestRender: () => {} }, {}, { onBranchChange: () => () => {} });
+    },
+    notify: (message, level) => notifications.push({ message, level }),
+  };
+  handlers.get("session_start")({}, context);
+  startupRefresh.mock.restore();
+  credential = { type: "oauth", access: "command-access", expires: Date.now() + 600_000 };
+  t.after(() => { footer?.dispose(); manager?.dispose(); });
+  return {
+    context, manager, notifications,
+    command: (args) => commands.get("cursor-status").handler(args, context),
+    event: (name, event = {}) => handlers.get(name)(event, context),
+    toggle: (args) => commands.get("pi-infobar").handler(args, context),
+  };
+}
+
 test("Cursor authoritative percentages override misleading legacy spend and pooled team usage", () => {
   const report = normalize(payload, 123);
   assert.equal(report.totalPercentUsed, 9.032);
@@ -280,6 +322,109 @@ test("both subscription chips render, active provider first, and errors mark cac
   cursor.dispose(); codex.dispose();
 });
 
+test("cursor-status supports cache, refresh, report-only, clear, and validation", async (t) => {
+  const harness = createCommandHarness(t);
+  let response = payload;
+  const fetch = t.mock.method(globalThis, "fetch", async () => Response.json(response));
+  await harness.command("--refresh");
+  assert.match(harness.notifications.at(-1).message, /91% left/);
+  const report = harness.manager.getReport();
+  assert.equal(harness.manager.state, "loaded");
+  await harness.command("");
+  assert.equal(fetch.mock.callCount(), 1);
+  assert.match(harness.notifications.at(-1).message, /cached/);
+  response = { ...payload, planUsage: { totalPercentUsed: 20 } };
+  await harness.command("--refresh --no-statusline --timeout 2");
+  assert.equal(fetch.mock.callCount(), 2);
+  assert.match(harness.notifications.at(-1).message, /80% left/);
+  assert.equal(harness.manager.getReport(), report);
+  await harness.command("--clear-statusline");
+  assert.equal(harness.manager.getReport(), undefined);
+  await harness.command("--bogus");
+  assert.match(harness.notifications.at(-1).message, /\/cursor-status/);
+  harness.event("session_shutdown");
+});
+
+for (const invalidation of ["clear", "shutdown", "disable"]) {
+  test(`pending cursor-status cannot repopulate the manager after ${invalidation}`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1_790_000_000_000 });
+    const harness = createCommandHarness(t);
+    const started = deferred(), response = deferred();
+    const fetch = t.mock.method(globalThis, "fetch", async () => {
+      started.resolve();
+      return response.promise; // Deliberately ignores abort to exercise generation guards.
+    });
+    const pending = harness.command("--refresh");
+    await started.promise;
+    if (invalidation === "clear") await harness.command("--clear-statusline");
+    else if (invalidation === "shutdown") harness.event("session_shutdown");
+    else {
+      await harness.toggle("off");
+      await harness.toggle("on"); // A re-enable must not make the old command valid again.
+      // Cancel the new background request started by enabling.
+      harness.manager.clear();
+    }
+    response.resolve(Response.json(payload));
+    await pending;
+    assert.equal(harness.manager.getReport(), undefined);
+    assert.equal(harness.manager.state, "idle");
+    const calls = fetch.mock.callCount();
+    t.mock.timers.tick(600_000);
+    await Promise.resolve();
+    assert.equal(fetch.mock.callCount(), calls);
+    assert.ok(!harness.notifications.some((n) => n.message.includes("Cursor Subscription Usage")));
+  });
+}
+
+for (const overlap of ["command-command", "background-command", "command-background"]) {
+  test(`${overlap} requests completed in reverse order retain only the latest report`, async (t) => {
+    const harness = createCommandHarness(t);
+    const firstStarted = deferred(), secondStarted = deferred();
+    const first = deferred(), second = deferred();
+    const signals = [];
+    t.mock.method(globalThis, "fetch", async (_url, options) => {
+      signals.push(options.signal);
+      const index = signals.length;
+      (index === 1 ? firstStarted : secondStarted).resolve();
+      return (index === 1 ? first : second).promise;
+    });
+    const p1 = overlap === "background-command"
+      ? harness.manager.refresh(harness.context, true) : harness.command("--refresh");
+    await firstStarted.promise;
+    const p2 = overlap === "command-background"
+      ? harness.manager.refresh(harness.context, true) : harness.command("--refresh");
+    await secondStarted.promise;
+    second.resolve(Response.json({ ...payload, planUsage: { totalPercentUsed: 20 } }));
+    await p2;
+    first.resolve(Response.json(payload));
+    await p1;
+    assert.equal(harness.manager.getReport().totalPercentUsed, 20);
+    assert.equal(signals[0].aborted, true);
+    assert.ok(!harness.notifications.some((n) => n.message.includes("91% left")));
+  });
+}
+
+test("failed explicit refresh marks a retained report stale and identifies subsequent cached output", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1_790_000_000_000 });
+  const harness = createCommandHarness(t);
+  harness.manager.setReport(normalize(payload));
+  const fetch = t.mock.method(globalThis, "fetch", async () => new Response("error", { status: 500 }));
+  await harness.command("--refresh");
+  assert.equal(harness.manager.state, "error");
+  assert.equal(harness.manager.isCacheFresh(), false);
+  assert.match(stripAnsi(renderUsageLine(160, harness.context, {}, runtime(harness.manager))), /stale/);
+  await harness.command("");
+  assert.equal(fetch.mock.callCount(), 1);
+  assert.match(harness.notifications.at(-1).message, /cached.*stale/);
+  assert.match(harness.notifications.at(-1).message, /91% left/);
+  t.mock.timers.tick(59_999);
+  assert.equal(fetch.mock.callCount(), 1);
+  t.mock.timers.tick(1);
+  // Join the scheduled retry, not a third request.
+  await harness.manager.refresh(harness.context);
+  assert.equal(fetch.mock.callCount(), 2);
+});
+
 for (const retained of [false, true]) {
   test(`non-forced event refreshes honor backoff ${retained ? "with" : "without"} retained data`, async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1_790_000_000_000 });
@@ -307,6 +452,83 @@ for (const retained of [false, true]) {
     assert.equal(calls, 4);
   });
 }
+
+test("report-only refresh failures and overlapping queries leave footer state untouched", async (t) => {
+  const harness = createCommandHarness(t);
+  harness.manager.setReport(normalize(payload));
+  const cached = harness.manager.getReport();
+  const started = deferred(), response = deferred();
+  let calls = 0, backgroundSignal;
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    if (++calls === 1) return new Response("error", { status: 500 });
+    if (calls === 2) {
+      backgroundSignal = options.signal;
+      started.resolve();
+      return response.promise;
+    }
+    return Response.json({ ...payload, planUsage: { totalPercentUsed: 20 } });
+  });
+  await harness.command("--refresh --no-statusline");
+  assert.match(harness.notifications.at(-1).message, /HTTP 500/);
+  assert.equal(harness.manager.state, "loaded");
+  assert.equal(harness.manager.isCacheFresh(), true);
+  assert.equal(harness.manager.getReport(), cached);
+  const pending = harness.manager.refresh(harness.context, true);
+  await started.promise;
+  await harness.command("--refresh --no-statusline");
+  assert.equal(backgroundSignal.aborted, false);
+  assert.equal(harness.manager.getReport(), cached);
+  assert.match(harness.notifications.at(-1).message, /80% left/);
+  response.resolve(Response.json(payload));
+  await pending;
+  assert.equal(harness.manager.getReport().totalPercentUsed, 9.032);
+});
+
+test("model selection and session-tree events cannot bypass the retry deadline", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1_790_000_000_000 });
+  const harness = createCommandHarness(t);
+  const fetch = t.mock.method(globalThis, "fetch", async () => new Response("error", { status: 500 }));
+  await harness.manager.refresh(harness.context);
+  for (let i = 0; i < 3; i++) {
+    harness.event("model_select", { model: harness.context.model });
+    harness.event("session_tree");
+    await harness.manager.refresh(harness.context);
+  }
+  assert.equal(fetch.mock.callCount(), 1);
+  await harness.command("");
+  assert.match(harness.notifications.at(-1).message, /HTTP 500/);
+  assert.equal(fetch.mock.callCount(), 1);
+  t.mock.timers.tick(60_000);
+  await harness.manager.refresh(harness.context);
+  assert.equal(fetch.mock.callCount(), 2);
+});
+
+test("managed command timeout is respected and a disposed manager cannot restart", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1_790_000_000_000 });
+  const harness = createCommandHarness(t);
+  const started = deferred();
+  const fetch = t.mock.method(globalThis, "fetch", async (_url, options) => {
+    started.resolve();
+    return new Promise((_resolve, reject) => {
+      options.signal.addEventListener("abort", () => reject(options.signal.reason), { once: true });
+    });
+  });
+  const pending = harness.command("--refresh --timeout 2");
+  await started.promise;
+  t.mock.timers.tick(1999);
+  assert.equal(harness.manager.state, "loading");
+  t.mock.timers.tick(1);
+  await pending;
+  assert.match(harness.notifications.at(-1).message, /timed out/);
+  harness.event("session_shutdown");
+  harness.manager.setReport(normalize(payload), harness.context);
+  await harness.manager.refresh(harness.context, true);
+  await harness.command("--refresh");
+  t.mock.timers.tick(600_000);
+  assert.equal(fetch.mock.callCount(), 1);
+  assert.equal(harness.manager.getReport(), undefined);
+  assert.equal(harness.manager.state, "idle");
+});
 
 test("optional percentages and absent spend data remain unavailable; omitted scalar spend means zero", () => {
   const omitted = normalize({ planUsage: {}, spendLimitUsage: {} });

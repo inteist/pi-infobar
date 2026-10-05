@@ -47,7 +47,7 @@ const CODEX_COMMAND_NAME = "codex-status";
  * Sets up:
  *  - Shared mutable `runtime` state bag shared by all renderers.
  *  - The `/pi-infobar` toggle command.
- *  - The `/codex-status` query command.
+ *  - The `/codex-status` and `/cursor-status` query commands.
  *  - Session lifecycle event listeners that keep the footer in sync.
  *
  * The `enabled` flag is read from the `PI_INFOBAR` env variable at startup
@@ -311,6 +311,45 @@ export default function piInfobar(pi: ExtensionAPI): void {
           "error",
         );
       }
+    },
+  });
+
+  pi.registerCommand("cursor-status", {
+    description: "Show Cursor subscription usage, Auto/API percentages, and on-demand spend",
+    handler: async (args, ctx) => {
+      const options = parseCodexStatusArgs(args, "/cursor-status");
+      if (!options.ok) {
+        ctx.ui.notify(options.error, "warning");
+        return;
+      }
+      if (options.value.clearStatusline) {
+        cursorUsage.clear();
+        ctx.ui.notify("Cursor usage cleared.", "info");
+        return;
+      }
+      if (options.value.statusline && enabled) {
+        const outcome = await cursorUsage.queryStatus(ctx, options.value);
+        // Clear, disable, shutdown, or a newer forced request invalidates this result.
+        if (!outcome) return;
+        if (!outcome.result.ok) {
+          ctx.ui.notify(outcome.result.error, "error");
+          return;
+        }
+        ctx.ui.notify(formatCursorUsageReport(outcome.result.report, outcome), "info");
+        return;
+      }
+      // Report-only queries never cancel or mutate the footer's managed requests.
+      const cached = cursorUsage.getReport();
+      if (cached && cursorUsage.isCacheFresh() && !options.value.refresh) {
+        ctx.ui.notify(formatCursorUsageReport(cached, { cached: true }), "info");
+        return;
+      }
+      const result = await queryCursorUsage(ctx, options.value);
+      if (!result.ok) {
+        ctx.ui.notify(result.error, "error");
+        return;
+      }
+      ctx.ui.notify(formatCursorUsageReport(result.report), "info");
     },
   });
 
