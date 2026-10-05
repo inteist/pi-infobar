@@ -102,6 +102,8 @@ export const COLOR = {
   worktree: "#ff7a00",
 
   // ── Usage ────────────────────────────────────────────────────────
+  /** Last-turn finish timestamp accent (orange). */
+  finishTime: "#f97316",
   /** Token count chip colour (input ↑ / output ↓). */
   token: "#64748b",
   /** Cost chip accent colour ($). */

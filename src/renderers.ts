@@ -86,7 +86,7 @@ export function renderUsageLine(
   const totals = runtime.tokenTotals;
   const context = runtime.context;
   const right: Chip[] = [
-    plain("", formatFinishTime(runtime.lastTurnFinishedAt), COLOR.token, 2),
+    plain("", formatFinishTime(runtime.lastTurnFinishedAt), COLOR.finishTime, 2),
     chip("CTX", context.label, context.color, 1, {
       valueBg: COLOR.panelLift,
       boldValue: true,
