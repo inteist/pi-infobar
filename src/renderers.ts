@@ -21,15 +21,15 @@ import {
   smartPathTruncate,
 } from "./format.js";
 import { getGitSnapshot } from "./git.js";
-import { COLOR, codexPercentColor, thinkingColor } from "./theme.js";
-import type { Chip, GitStatusPart, RuntimeState } from "./types.js";
+import { COLOR, codexPercentColor, pullRequestColor, thinkingColor } from "./theme.js";
+import type { Chip, GitStatusPart, PullRequestInfo, RuntimeState } from "./types.js";
 
 // ── Line Renderers ────────────────────────────────────────────────────────────────────────────────────────────────
 
 /**
- * Render the **primary** footer line (line 2 of 4).
+ * Render the **primary** footer line (line 1 of 3).
  *
- * Left side:  path cluster (working directory + branch + worktree chips).
+ * Left side:  working-directory path chip.
  * Right side: provider/model | THINK chips (priority-trimmed to fit the width).
  *
  * The right-side chips are passed to `fitLeftRight` which progressively drops
@@ -38,7 +38,6 @@ import type { Chip, GitStatusPart, RuntimeState } from "./types.js";
 export function renderPrimaryLine(
   width: number,
   ctx: ExtensionContext,
-  footerData: ReadonlyFooterDataProvider,
   runtime: RuntimeState,
 ): string {
   const provider = ctx.model?.provider ?? "PROVIDER";
@@ -61,13 +60,82 @@ export function renderPrimaryLine(
     ),
   ];
 
+  const path = formatWorkingPath(ctx.cwd);
   return fitLeftRight(width, right, (available) =>
-    renderPathCluster(available, ctx, footerData),
+    renderFittedPathChip(path, available),
   );
 }
 
+/** Fewest branch-name columns a git-line layout may leave before a more compact one is tried. */
+const BRANCH_MIN_WIDTH = 12;
+
 /**
- * Render the **usage** footer line (line 4 of 4).
+ * Render the **git** footer line (line 2 of 3): linked-worktree chip, branch
+ * chip with status symbols, and the branch's pull request chip, left-aligned.
+ * Blank outside a git repository.
+ *
+ * Tries progressively more compact layouts until the branch name keeps at
+ * least `BRANCH_MIN_WIDTH` columns (or its full width, if shorter):
+ *  1. Worktree (24) + status + PR
+ *  2. Worktree (12) + status + PR
+ *  3. Status + PR
+ *  4. PR only
+ *  5. Branch only
+ *
+ * If no layout fits, the branch name alone is shortened to the room that is left.
+ */
+export function renderGitLine(
+  width: number,
+  ctx: ExtensionContext,
+  footerData: ReadonlyFooterDataProvider,
+  runtime: RuntimeState,
+): string {
+  // The footer-data provider may have a branch name from the session that is
+  // more up-to-date than what `git status` returns (e.g. immediately after a
+  // branch switch, before the git cache has expired).
+  const footerBranch = footerData.getGitBranch() ?? undefined;
+  const git = getGitSnapshot(ctx.cwd, footerBranch);
+  const branch = git.branch ?? footerBranch;
+  if (!branch) return "";
+
+  // Pi reports a detached HEAD as the branch "detached", which has no pull request.
+  const pr = branch === "detached" ? undefined : runtime.pullRequests.get(ctx.cwd, branch);
+  const minBranchWidth = Math.min(visibleWidth(branch), BRANCH_MIN_WIDTH);
+
+  for (const layout of [
+    { worktreeWidth: 24, includeStatus: true, includePr: true },
+    { worktreeWidth: 12, includeStatus: true, includePr: true },
+    { worktreeWidth: 0, includeStatus: true, includePr: true },
+    { worktreeWidth: 0, includeStatus: false, includePr: true },
+    { worktreeWidth: 0, includeStatus: false, includePr: false },
+  ]) {
+    const worktreeChip =
+      layout.worktreeWidth > 0 && git.worktreeName
+        ? renderWorktreeChip(git.worktreeName, layout.worktreeWidth)
+        : "";
+    const prChip = layout.includePr && pr ? renderPullRequestChip(pr) : "";
+    const statusParts = layout.includeStatus ? git.statusParts : undefined;
+
+    // Each companion chip costs its own width plus one separating space.
+    const companionsWidth = [worktreeChip, prChip]
+      .filter(Boolean)
+      .reduce((sum, part) => sum + visibleWidth(part) + 1, 0);
+    const chromeWidth = visibleWidth(renderBranchChip("", statusParts));
+    const branchWidth = width - companionsWidth - chromeWidth;
+    if (branchWidth < minBranchWidth) continue;
+
+    const branchChip = renderBranchChip(shorten(branch, branchWidth), statusParts);
+    return [worktreeChip, branchChip, prChip].filter(Boolean).join(" ");
+  }
+
+  // Last resort: branch chip alone, shortened like the layouts above so it keeps
+  // its ellipsis and closing arrow; hard-truncate only when not even that fits.
+  const room = Math.max(1, width - visibleWidth(renderBranchChip("")));
+  return truncateToWidth(renderBranchChip(shorten(branch, room)), width, "");
+}
+
+/**
+ * Render the **usage** footer line (line 3 of 3).
  *
  * Left side:  subscription usage chips (active provider first).
  * Right side: finish time | CTX | ↑ uncached input | ↓ output | R cache read |
@@ -158,80 +226,6 @@ function fitLeftRight(
   return truncateToWidth(renderLeft(width), width, "");
 }
 
-// ── Path Cluster ──────────────────────────────────────────────────────────────────────────────────────────────────
-
-/**
- * Render the left-side "path cluster": a combination of a path chip, a git
- * branch chip (with status symbols), and an optional linked-worktree chip.
- *
- * The function tries a waterfall of progressively more compact layouts until
- * one fits within `maxWidth`.  Layout attempts (in order):
- *  1. Full widths + status indicators
- *  2. Narrower widths + status indicators
- *  3. Minimum widths + status indicators
- *  4. Narrower widths, no status symbols
- *  5. Branch only (no worktree), no status
- *  6. Worktree only (no branch), with status
- *  7. Worktree only, no status
- *  8. No branch or worktree – path chip alone
- *
- * If even the path chip alone is wider than `maxWidth`, it is hard-truncated.
- */
-function renderPathCluster(
-  maxWidth: number,
-  ctx: ExtensionContext,
-  footerData: ReadonlyFooterDataProvider,
-): string {
-  if (maxWidth <= 0) return "";
-
-  // The footer-data provider may have a branch name from the session that is
-  // more up-to-date than what `git status` returns (e.g. immediately after a
-  // branch switch, before the git cache has expired).
-  const footerBranch = footerData.getGitBranch() ?? undefined;
-  const git = getGitSnapshot(ctx.cwd, footerBranch);
-  const branch = git.branch ?? footerBranch;
-  const fullPath = formatWorkingPath(ctx.cwd);
-
-  for (const attempt of [
-    { worktreeWidth: 24, branchWidth: 28, includeStatus: true },
-    { worktreeWidth: 18, branchWidth: 18, includeStatus: true },
-    { worktreeWidth: 12, branchWidth: 12, includeStatus: true },
-    { worktreeWidth: 18, branchWidth: 18, includeStatus: false },
-    { worktreeWidth: 18, branchWidth: 0, includeStatus: false },
-    { worktreeWidth: 0, branchWidth: 18, includeStatus: true },
-    { worktreeWidth: 0, branchWidth: 18, includeStatus: false },
-    { worktreeWidth: 0, branchWidth: 0, includeStatus: false },
-  ]) {
-    const worktreeChip =
-      attempt.worktreeWidth > 0 && git.worktreeName
-        ? renderWorktreeChip(git.worktreeName, attempt.worktreeWidth)
-        : "";
-    const branchChip =
-      attempt.branchWidth > 0 && branch
-        ? renderBranchChip(
-            branch,
-            attempt.branchWidth,
-            attempt.includeStatus ? git.statusParts : undefined,
-          )
-        : "";
-    const fixed = [worktreeChip, branchChip].filter(Boolean).join(" ");
-    const fixedWidth = visibleWidth(fixed);
-    const gap = fixedWidth > 0 ? 1 : 0;
-    const pathMaxWidth = Math.max(0, maxWidth - fixedWidth - gap);
-    const pathChip = renderFittedPathChip(fullPath, pathMaxWidth);
-    const cluster = [pathChip, fixed].filter(Boolean).join(" ");
-
-    if (visibleWidth(cluster) <= maxWidth) return cluster;
-  }
-
-  // Last resort: path chip alone, hard-truncated.
-  return truncateToWidth(
-    renderFittedPathChip(fullPath, maxWidth),
-    maxWidth,
-    "",
-  );
-}
-
 // ── Path Chips ────────────────────────────────────────────—————————————————————————————————————————————───────────
 
 /**
@@ -279,13 +273,12 @@ function renderFittedPathChip(path: string, maxWidth: number): string {
  * coloured status-indicator segments (e.g. `~2 +1 ✘3`).
  *
  * When `statusParts` is omitted (compact layout), only the branch name is shown.
+ * Callers shorten `branchText` to fit beforehand.
  */
 function renderBranchChip(
-  branch: string,
-  maxWidth: number,
+  branchText: string,
   statusParts?: GitStatusPart[],
 ): string {
-  const branchText = shorten(branch, maxWidth);
   const segments = [
     { text: branchText, fg: COLOR.git, bold: true },
     ...(statusParts ?? []).map((part) => ({
@@ -303,12 +296,26 @@ function renderBranchChip(
 
 /**
  * Render the linked-worktree chip with a folder icon (󰙅) and a truncated
- * worktree name.  Priority 2: dropped before branch and path on narrow terminals.
+ * worktree name.  Dropped before the branch on narrow terminals.
  */
 function renderWorktreeChip(worktreeName: string, maxWidth: number): string {
   return renderChip(
     chip("󰙅", shorten(worktreeName, maxWidth), COLOR.worktree, 2, {
       labelFg: COLOR.black,
+    }),
+  );
+}
+
+/**
+ * Render the pull request chip: a PR icon () on the GitHub state colour
+ * (open, draft, merged, closed) followed by the PR number.
+ */
+function renderPullRequestChip(pr: PullRequestInfo): string {
+  return renderChip(
+    chip("", `#${pr.number}`, pullRequestColor(pr.state), 1, {
+      labelFg: COLOR.black,
+      valueBg: COLOR.panelLift,
+      boldValue: true,
     }),
   );
 }

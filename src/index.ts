@@ -25,8 +25,8 @@ import {
 } from "./format.js";
 import { PullRequestCache } from "./pull-request.js";
 import {
+  renderGitLine,
   renderPrimaryLine,
-  renderSeparatorLine,
   renderUsageLine,
 } from "./renderers.js";
 import type { RuntimeState } from "./types.js";
@@ -194,13 +194,12 @@ export default function piInfobar(pi: ExtensionAPI): void {
         },
 
         /**
-         * Render the four-line footer for the current terminal `width`.
+         * Render the three-line footer for the current terminal `width`.
          *
          * Lines:
-         *   1. Separator (thin rule)
-         *   2. Primary line  – path + branch + provider/model + thinking chips
-         *   3. Spacer        – blank separator for visual breathing room
-         *   4. Usage line    – subscription chips + context + tokens + finish time + cost
+         *   1. Primary line  – path + provider/model + thinking chips
+         *   2. Git line      – worktree + branch + pull request chips (blank outside git)
+         *   3. Usage line    – subscription chips + context + tokens + finish time + cost
          *
          * Memoised: if both `width` and `runtime.renderVersion` are unchanged
          * from the previous call, the cached string array is returned directly.
@@ -215,9 +214,8 @@ export default function piInfobar(pi: ExtensionAPI): void {
           }
 
           cachedLines = [
-            // renderSeparatorLine(width),
-            renderPrimaryLine(width, ctx, footerData, runtime),
-            renderSeparatorLine(width, " "),
+            renderPrimaryLine(width, ctx, runtime),
+            renderGitLine(width, ctx, footerData, runtime),
             renderUsageLine(width, ctx, footerData, runtime),
           ];
           cachedWidth = width;
