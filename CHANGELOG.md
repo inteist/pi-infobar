@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Pull request number for the current branch, looked up in the background with `gh pr view`, cached for one minute, and colored by state (open, draft, merged, closed).
 - Cursor subscription usage tracking using the existing Pi OAuth login: included percentage remaining and reset countdown matching OpenAI's footer format, and `/cursor-status` reports with Auto/API percentages and personal on-demand spend.
 - Independent five-minute Cursor usage cache with bounded retry backoff, stale-report indicators, and active-provider priority when both subscription chips are shown.
 - Separate cumulative cache-read (`R`) and cache-write (`W`) token counters, shown only when nonzero.
@@ -23,12 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Moved the git branch, status, and worktree chips from the first row to their own second row, which replaces the blank spacer row. The branch name now uses the row's free width instead of at most 28 columns.
 - Show the last turn finish time as `Oct 2  15:32`: the date, a clock icon, and the time without seconds.
 - Show an estimated context percentage (`~N%`) after compaction until fresh model usage is available, counting the summary, retained messages, and system prompt; fall back to `?` if estimation fails.
 - Require Pi `1.0.0` or later, update the development SDK, and use its session projection directly without older-version prompt fallbacks.
 - Run regression tests as part of the pre-publish check.
 - Replaced the static `MODEL` chip label with the active model provider.
-- Moved the `CTX` chip to the start of the second row's right side.
+- Moved the `CTX` chip to the start of the usage row's right side.
 
 ## [0.3.0] - 2026-06-24
 
