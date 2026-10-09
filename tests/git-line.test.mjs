@@ -107,6 +107,18 @@ test("a failed refresh keeps the known pull request", async (t) => {
   assert.match(footer.gitLine(), /#7/, "A network error or timeout must not hide a known pull request");
 });
 
+test("a detached HEAD skips the pull request lookup", (t) => {
+  const cwd = createRepo("feat/detached");
+  git(cwd, "checkout", "-q", "--detach");
+  const pullRequests = { get: t.mock.fn() };
+  // Pi reports a detached HEAD as the branch "detached".
+  const footerData = { getGitBranch: () => "detached" };
+
+  const line = stripAnsi(renderGitLine(160, { cwd }, footerData, { pullRequests }));
+  assert.match(line, /detached/);
+  assert.equal(pullRequests.get.mock.callCount(), 0);
+});
+
 test("a missing gh is looked for again after ten minutes, not every minute", async (t) => {
   t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
   const testPath = process.env.PATH;
