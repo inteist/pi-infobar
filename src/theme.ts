@@ -1,4 +1,4 @@
-import type { ThinkingLevel } from "./types.js";
+import type { PullRequestState, ThinkingLevel } from "./types.js";
 
 // ── Color Palette ────────────────────────────────────────────────────
 
@@ -28,8 +28,6 @@ export const COLOR = {
   panelLift: "#1f2937",
   /** Soft panel used for the Codex chip in idle state. */
   panelSoft: "#334155",
-  /** Thin rule / separator colour. */
-  separator: "#1e293b",
 
   // ── Path ─────────────────────────────────────────────────────────
   /** Accent colour for the working-directory path chip. */
@@ -101,6 +99,16 @@ export const COLOR = {
   /** Linked-worktree chip accent (vivid orange, distinct from the branch green). */
   worktree: "#ff7a00",
 
+  // ── Pull Request (GitHub state colours) ──────────────────────────
+  /** Open pull request. */
+  prOpen: "#3fb950",
+  /** Draft pull request. */
+  prDraft: "#8b949e",
+  /** Merged pull request. */
+  prMerged: "#a371f7",
+  /** Closed (unmerged) pull request. */
+  prClosed: "#f85149",
+
   // ── Usage ────────────────────────────────────────────────────────
   /** Last-turn finish timestamp accent (orange). */
   finishTime: "#f97316",
@@ -157,6 +165,20 @@ export function thinkingColor(level: ThinkingLevel): string {
   // this version does not know yet. Never pass an undefined accent to the ANSI
   // renderer; reuse the highest known color until explicit support is added.
   return COLOR.thinkMax;
+}
+
+/** Map a pull request state to the GitHub colour for the PR chip. */
+export function pullRequestColor(state: PullRequestState): string {
+  switch (state) {
+    case "open":
+      return COLOR.prOpen;
+    case "draft":
+      return COLOR.prDraft;
+    case "merged":
+      return COLOR.prMerged;
+    case "closed":
+      return COLOR.prClosed;
+  }
 }
 
 /**

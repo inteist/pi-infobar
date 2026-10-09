@@ -2,7 +2,7 @@
 
 # pi-infobar - Pi Coding Agent Extension
 
-High-contrast two-row info bar for the Pi coding agent.
+High-contrast three-row info bar for the Pi coding agent.
 
 This extension replaces Pi's default footer with a cleaner info bar layout inspired by a Starship-style prompt. It keeps the most important information visually dominant and avoids low-value activity labels like `status`, `idle`, or `ready`.
 
@@ -26,20 +26,30 @@ pi -e npm:pi-infobar
 
 #### Left:
 
-- current working folder, rendered first and styled as the primary segment;
-- linked worktree name with `󰙅`, when the current folder is a Git worktree;
-- git branch, when available, with Starship-style git status inline (`~` modified blue, `✘` untracked red, `+` staged green, `-` deleted red, `⇡/⇣` ahead/behind).
-
-The path segment stays as the normal path. Linked worktrees get a separate green worktree segment using the worktree root folder name.
+- current working folder, styled as the primary segment.
 
 #### Right:
 
 - active model in light blue, labeled with its provider;
 - thinking level with effort-specific color.
 
-A subtle separator sits between the two information rows.
+### Line 2 — git
 
-### Line 2
+- linked worktree name with `󰙅`, when the current folder is a Git worktree;
+- git branch with Starship-style git status inline (`~` modified blue, `✘` untracked red, `+` staged green, `-` deleted red, `⇡/⇣` ahead/behind);
+- pull request number for the branch, such as ` #42`, in GitHub's state colors: green open, grey draft, purple merged, red closed.
+
+Linked worktrees get a separate orange worktree segment using the worktree root folder name.
+The row is blank outside a Git repository. On narrow terminals the worktree, status, and
+pull request segments are dropped, in that order, to keep at least 12 columns of the branch name.
+
+The pull request comes from the GitHub CLI (`gh pr view`), so it needs `gh` installed and
+authenticated. The lookup runs in the background and is cached for one minute per branch.
+A failed lookup, such as a network error, keeps the last known pull request; with none known,
+the segment stays hidden. A detached HEAD skips the lookup, and a missing `gh` is looked for
+again every 10 minutes.
+
+### Line 3
 
 #### Left: Codex and Cursor subscription usage
 
@@ -136,9 +146,10 @@ pi-infobar/
 │   ├── chips.ts          ← Chip factory + renderChip/renderChips/renderSegmentedChip (~85 lines)
 │   ├── format.ts         ← Pure data formatters: formatCount, formatCost, shortenModel, etc. (~80 lines)
 │   ├── git.ts            ← Git snapshot, cache, parsing, status formatting (~175 lines)
+│   ├── pull-request.ts   ← Background `gh pr view` lookup and cache for the branch's PR
 │   ├── codex-usage/      ← Codex subscription usage queries, reports, cache, and statusline manager
 │   ├── cursor-usage/     ← Cursor OAuth usage query, report formatting, and independent cache
-│   └── renderers.ts      ← Footer line renderers: renderPrimaryLine, renderUsageLine, etc. (~140 lines)
+│   └── renderers.ts      ← Footer line renderers: renderPrimaryLine, renderGitLine, renderUsageLine, etc.
 ├── index.ts              ← Re-export barrel: `export { default } from "./src/index.js"` (~1 line)
 ├── package.json          ← Updated "files" list & tsconfig include
 └── tsconfig.json         ← Updated include glob
@@ -183,12 +194,17 @@ All git integration, fully self-contained:
 - `parseGitStatus()`, `parseStatusBranch()`
 - `formatGitStatus()`, `formatGitStatusPart()`, `isDirty()`
 
+Pull request lookup:
+
+- `PullRequestCache` — non-blocking `get(cwd, branch)` with a one-minute TTL
+- `parsePullRequest()`
+
 Footer line renderers that compose chips, git, and formatting:
 
-- `renderPrimaryLine()`, `renderUsageLine()`, `renderSeparatorLine()`
+- `renderPrimaryLine()`, `renderGitLine()`, `renderUsageLine()`
 - `fitLeftRight()`
-- `renderPathCluster()`, `renderPathChip()`, `renderFittedPathChip()`
-- `renderBranchChip()`, `renderWorktreeChip()`
+- `renderPathChip()`, `renderFittedPathChip()`
+- `renderBranchChip()`, `renderWorktreeChip()`, `renderPullRequestChip()`
 - `renderCodexStatus()`
 
 The main extension entry point — only lifecycle & event wiring:
