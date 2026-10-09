@@ -70,3 +70,12 @@ export interface GitStatusCounts {
   ahead: number;
   behind: number;
 }
+
+// ── Pull Request ─────────────────────────────────────────────────────
+
+export type PullRequestState = "open" | "draft" | "merged" | "closed";
+
+export interface PullRequestInfo {
+  number: number;
+  state: PullRequestState;
+}
