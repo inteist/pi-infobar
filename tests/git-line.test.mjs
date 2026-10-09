@@ -156,6 +156,21 @@ test("narrow terminals drop the pull request chip before the branch name", async
   assert.ok(visibleWidth(narrow) <= 30, `Line must fit 30 columns: ${JSON.stringify(narrow)}`);
 });
 
+test("very narrow terminals shorten the branch name instead of cutting the chip", async () => {
+  const cwd = createRepo("feat/a-fairly-long-branch-name");
+  const footer = createFooter(cwd, undefined);
+  const closingArrow = footer.gitLine().at(-1);
+  await footer.nextUpdate();
+
+  for (const width of [20, 19, 12]) {
+    const line = footer.gitLine(width);
+    const shown = JSON.stringify(line);
+    assert.ok(visibleWidth(line) <= width, `Line must fit ${width} columns: ${shown}`);
+    assert.match(line, /…/, `The branch name must keep its ellipsis at ${width} columns: ${shown}`);
+    assert.ok(line.endsWith(closingArrow), `The chip must keep its closing arrow at ${width} columns: ${shown}`);
+  }
+});
+
 test("the git line is blank outside a git repository", () => {
   const footer = createFooter(mkdtempSync(join(buildDir, "plain-")), undefined);
   assert.equal(footer.gitLine(), "");
