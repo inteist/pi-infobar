@@ -28,8 +28,6 @@ export const COLOR = {
   panelLift: "#1f2937",
   /** Soft panel used for the Codex chip in idle state. */
   panelSoft: "#334155",
-  /** Thin rule / separator colour. */
-  separator: "#1e293b",
 
   // ── Path ─────────────────────────────────────────────────────────
   /** Accent colour for the working-directory path chip. */

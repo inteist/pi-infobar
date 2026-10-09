@@ -4,7 +4,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
-import { ansi, readableTextOn } from "./ansi.js";
+import { readableTextOn } from "./ansi.js";
 import { chip, plain, renderChip, renderChips, renderSegmentedChip } from "./chips.js";
 import { isOpenAICodexModel } from "./codex-usage/index.js";
 import { cursorRemaining, isCursorModel } from "./cursor-usage/index.js";
@@ -173,18 +173,6 @@ export function renderUsageLine(
   return fitLeftRight(width, right, (available) =>
     renderSubscriptionStatus(available, runtime, ctx),
   );
-}
-
-/**
- * Render a full-width separator line.
- *
- * @param separate  Character(s) to repeat.  Defaults to `"─"` (thin box rule).
- *                  Pass `" "` for the blank spacer between the two data rows.
- */
-export function renderSeparatorLine(width: number, separate?: string): string {
-  return ansi(separate ?? "─".repeat(Math.max(0, width)), {
-    fg: COLOR.separator,
-  });
 }
 
 // ── Layout ───────────────────────────────────────────────────────────
