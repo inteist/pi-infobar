@@ -91,6 +91,46 @@ test("a failed gh lookup shows the branch without a pull request chip", async ()
   assert.doesNotMatch(line, /#/);
 });
 
+test("a failed refresh keeps the known pull request", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
+  const cwd = createRepo("feat/keep-pr");
+  const footer = createFooter(cwd, '{"isDraft":false,"number":7,"state":"OPEN"}');
+
+  footer.gitLine();
+  await footer.nextUpdate();
+  assert.match(footer.gitLine(), /#7/);
+
+  delete process.env.FAKE_GH_OUTPUT;
+  t.mock.timers.tick(61_000);
+  footer.gitLine();
+  await footer.nextUpdate();
+  assert.match(footer.gitLine(), /#7/, "A network error or timeout must not hide a known pull request");
+});
+
+test("a missing gh is looked for again after ten minutes, not every minute", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
+  const testPath = process.env.PATH;
+  process.env.PATH = mkdtempSync(join(buildDir, "empty-bin-"));
+  t.after(() => (process.env.PATH = testPath));
+
+  let lookups = 0;
+  const cache = new PullRequestCache(() => (lookups += 1));
+  // A missing binary fails on the next tick, so one setImmediate observes the settled lookup.
+  const render = async () => {
+    cache.get(buildDir, "feat/no-gh");
+    await new Promise(setImmediate);
+  };
+
+  await render();
+  assert.equal(lookups, 1);
+  t.mock.timers.tick(2 * 60_000);
+  await render();
+  assert.equal(lookups, 1, "A missing gh must not be looked for every minute");
+  t.mock.timers.tick(9 * 60_000);
+  await render();
+  assert.equal(lookups, 2);
+});
+
 test("narrow terminals drop the pull request chip before the branch name", async () => {
   const cwd = createRepo("feat/a-fairly-long-branch-name");
   const footer = createFooter(cwd, '{"isDraft":false,"number":4242,"state":"MERGED"}');
