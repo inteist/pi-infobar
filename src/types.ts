@@ -2,6 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 import type { CodexUsageManager } from "./codex-usage/index.js";
 import type { CursorUsageManager } from "./cursor-usage/index.js";
+import type { PullRequestCache } from "./pull-request.js";
 
 // ── Thinking ─────────────────────────────────────────────────────────
 
@@ -18,6 +19,7 @@ export interface RuntimeState {
   lastTurnFinishedAt?: number;
   codexUsage: CodexUsageManager;
   cursorUsage: CursorUsageManager;
+  pullRequests: PullRequestCache;
 }
 
 // ── Tokens / Cost ────────────────────────────────────────────────────
